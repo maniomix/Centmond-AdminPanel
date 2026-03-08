@@ -2,7 +2,7 @@
 
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { Eye, Pencil, MoreHorizontal } from "lucide-react";
+import { Pencil, MoreHorizontal } from "lucide-react";
 import { DataTable } from "@/components/shared/data-table";
 import { Pagination } from "@/components/shared/pagination";
 import { SearchFilter } from "@/components/shared/search-filter";
@@ -12,10 +12,10 @@ import { Button } from "@/components/ui/button";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { createClient } from "@/lib/supabase/client";
 import { formatDateShort } from "@/lib/utils";
 import { toast } from "sonner";
 import type { ContentRow } from "@/types";
+import { deleteContentAction } from "./actions";
 
 const statusOptions = [
   { label: "Draft", value: "draft" },
@@ -43,7 +43,6 @@ interface ContentTableProps {
 export function ContentTable({ content, count, page, pageSize, search, status, sortBy, sortOrder }: ContentTableProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const supabase = createClient();
   const totalPages = Math.ceil(count / pageSize);
 
   function buildUrl(overrides: Record<string, string>) {
@@ -57,8 +56,8 @@ export function ContentTable({ content, count, page, pageSize, search, status, s
   }
 
   async function handleDelete(id: string) {
-    const { error } = await supabase.from("content").delete().eq("id", id);
-    if (error) {
+    const result = await deleteContentAction(id);
+    if (result.error) {
       toast.error("Failed to delete content");
       return;
     }

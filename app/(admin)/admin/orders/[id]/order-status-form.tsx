@@ -6,24 +6,32 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { createClient } from "@/lib/supabase/client";
+import { updateOrderStatusAction } from "../actions";
+import type { OrderRow } from "@/types";
 
-const statusOptions = ["pending", "processing", "completed", "cancelled", "refunded"];
+const statusOptions: OrderRow["status"][] = [
+  "pending",
+  "processing",
+  "completed",
+  "cancelled",
+  "refunded",
+];
 
-export function OrderStatusForm({ orderId, currentStatus }: { orderId: string; currentStatus: string }) {
+export function OrderStatusForm({
+  orderId,
+  currentStatus,
+}: {
+  orderId: string;
+  currentStatus: OrderRow["status"];
+}) {
   const router = useRouter();
-  const supabase = createClient();
-  const [status, setStatus] = useState(currentStatus);
+  const [status, setStatus] = useState<OrderRow["status"]>(currentStatus);
   const [loading, setLoading] = useState(false);
 
   async function handleUpdate() {
     setLoading(true);
-    const { error } = await supabase
-      .from("orders")
-      .update({ status, updated_at: new Date().toISOString() })
-      .eq("id", orderId);
-
-    if (error) {
+    const result = await updateOrderStatusAction(orderId, status);
+    if (result.error) {
       toast.error("Failed to update status");
     } else {
       toast.success("Order status updated");
@@ -36,7 +44,7 @@ export function OrderStatusForm({ orderId, currentStatus }: { orderId: string; c
     <div className="space-y-3">
       <div className="space-y-1.5">
         <Label>Status</Label>
-        <Select value={status} onValueChange={setStatus}>
+        <Select value={status} onValueChange={(value) => setStatus(value as OrderRow["status"])}>
           <SelectTrigger>
             <SelectValue />
           </SelectTrigger>

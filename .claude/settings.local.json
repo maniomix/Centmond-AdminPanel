@@ -6,7 +6,8 @@
       "Bash(npm install:*)",
       "Bash(npx tsc:*)",
       "Bash(npm rebuild:*)",
-      "Bash(./node_modules/.bin/tsc:*)"
+      "Bash(./node_modules/.bin/tsc:*)",
+      "Bash(ls \"/Users/mani/Desktop/Centmond-AdminPanel/app/\\(admin\\)/admin/orders/[id]/\")"
     ]
   }
 }

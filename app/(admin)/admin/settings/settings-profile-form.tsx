@@ -12,31 +12,31 @@ import { Label } from "@/components/ui/label";
 import { updateProfileAction } from "./actions";
 
 const profileSchema = z.object({
-  full_name: z.string().min(1, "Name is required"),
+  display_name: z.string().min(1, "Name is required"),
 });
 
 type ProfileValues = z.infer<typeof profileSchema>;
 
 interface SettingsProfileFormProps {
   adminId: string;
-  fullName: string | null;
+  displayName: string | null;
   username: string;
 }
 
-export function SettingsProfileForm({ adminId, fullName, username }: SettingsProfileFormProps) {
+export function SettingsProfileForm({ adminId, displayName, username }: SettingsProfileFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
   const { register, handleSubmit, formState: { errors } } = useForm<ProfileValues>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
-      full_name: fullName ?? "",
+      display_name: displayName ?? "",
     },
   });
 
   async function onSubmit(values: ProfileValues) {
     setLoading(true);
-    const result = await updateProfileAction(adminId, values.full_name);
+    const result = await updateProfileAction(adminId, values.display_name);
 
     if (result?.error) {
       toast.error("Failed to update profile");
@@ -51,9 +51,9 @@ export function SettingsProfileForm({ adminId, fullName, username }: SettingsPro
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1.5">
-          <Label>Full Name</Label>
-          <Input {...register("full_name")} />
-          {errors.full_name && <p className="text-xs text-red-600">{errors.full_name.message}</p>}
+          <Label>Display Name</Label>
+          <Input {...register("display_name")} />
+          {errors.display_name && <p className="text-xs text-red-600">{errors.display_name.message}</p>}
         </div>
         <div className="space-y-1.5">
           <Label>Username</Label>

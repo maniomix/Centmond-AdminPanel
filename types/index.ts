@@ -1,4 +1,12 @@
-export type { UserRow, OrderRow, ContentRow, ActivityLogRow } from "./database";
+export type {
+  UserRow,
+  TransactionRow,
+  SubscriptionRow,
+  EventRow,
+  OrderRow,
+  ContentRow,
+  ActivityLogRow,
+} from "./database";
 
 export interface PaginatedResponse<T> {
   data: T[];

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -11,8 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { createClient } from "@/lib/supabase/client";
 import type { ContentRow } from "@/types";
+import { upsertContentAction } from "../actions";
 
 const contentSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -30,10 +30,9 @@ function slugify(str: string) {
 
 export function ContentForm({ content }: { content?: ContentRow }) {
   const router = useRouter();
-  const supabase = createClient();
   const [loading, setLoading] = useState(false);
 
-  const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<ContentValues>({
+  const { register, handleSubmit, setValue, control, formState: { errors } } = useForm<ContentValues>({
     resolver: zodResolver(contentSchema),
     defaultValues: {
       title: content?.title ?? "",
@@ -56,35 +55,25 @@ export function ContentForm({ content }: { content?: ContentRow }) {
     setLoading(true);
 
     const payload = {
-      ...values,
+      title: values.title,
+      slug: values.slug,
+      body: values.body?.trim() ? values.body : null,
+      status: values.status,
+      category: values.category?.trim() ? values.category : null,
       published_at: values.status === "published" && !content?.published_at
         ? new Date().toISOString()
         : content?.published_at ?? null,
-      updated_at: new Date().toISOString(),
     };
 
-    if (content) {
-      const { error } = await supabase.from("content").update(payload).eq("id", content.id);
-      if (error) {
-        toast.error("Failed to update content");
-      } else {
-        toast.success("Content updated");
-        router.refresh();
-      }
-    } else {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { error } = await supabase.from("content").insert({
-        ...payload,
-        author_id: user!.id,
-      });
-      if (error) {
-        toast.error("Failed to create content");
-      } else {
-        toast.success("Content created");
-        router.push("/admin/content");
-      }
+    const result = await upsertContentAction(content?.id ?? null, payload);
+    if (result?.error) {
+      toast.error(content ? "Failed to update content" : "Failed to create content");
+      setLoading(false);
+      return;
     }
 
+    toast.success(content ? "Content updated" : "Content created");
+    if (content) router.refresh();
     setLoading(false);
   }
 
@@ -106,16 +95,22 @@ export function ContentForm({ content }: { content?: ContentRow }) {
         </div>
         <div className="space-y-1.5">
           <Label>Status</Label>
-          <Select value={watch("status")} onValueChange={(v) => setValue("status", v as ContentValues["status"])}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="draft">Draft</SelectItem>
-              <SelectItem value="published">Published</SelectItem>
-              <SelectItem value="archived">Archived</SelectItem>
-            </SelectContent>
-          </Select>
+          <Controller
+            name="status"
+            control={control}
+            render={({ field }) => (
+              <Select value={field.value} onValueChange={field.onChange}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="draft">Draft</SelectItem>
+                  <SelectItem value="published">Published</SelectItem>
+                  <SelectItem value="archived">Archived</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+          />
         </div>
         <div className="space-y-1.5">
           <Label>Category</Label>

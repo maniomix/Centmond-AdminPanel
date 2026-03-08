@@ -1,28 +1,34 @@
-import { headers } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/shared/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { SettingsProfileForm } from "./settings-profile-form";
 import { AdminAccessForm } from "./admin-access-form";
+import { ChangePasswordForm } from "./change-password-form";
+import { requireAdminSession } from "@/lib/admin-session";
+import { redirect } from "next/navigation";
 
 export default async function SettingsPage() {
-  const headersList = await headers();
-  const adminId = headersList.get("x-admin-id")!;
-  const adminRole = headersList.get("x-admin-role")!;
+  const session = await requireAdminSession();
+  const adminId = session.sub;
+  const adminRole = session.role;
 
   const supabase = createAdminClient();
 
   const { data: currentAdmin } = await supabase
-    .from("panel_admins")
-    .select("id, username, full_name, role")
+    .from("admin_users")
+    .select("id, username, display_name, role")
     .eq("id", adminId)
     .single();
 
-  const { data: allAdmins } = adminRole === "admin"
+  if (!currentAdmin) {
+    redirect("/login");
+  }
+
+  const { data: allAdmins } = adminRole === "super_admin"
     ? await supabase
-        .from("panel_admins")
-        .select("id, username, full_name, role")
+        .from("admin_users")
+        .select("id, username, display_name, role")
         .order("role", { ascending: true })
         .order("username", { ascending: true })
     : { data: null };
@@ -39,7 +45,7 @@ export default async function SettingsPage() {
         <CardContent>
           <SettingsProfileForm
             adminId={adminId}
-            fullName={currentAdmin?.full_name ?? null}
+            displayName={currentAdmin?.display_name ?? null}
             username={currentAdmin?.username ?? ""}
           />
         </CardContent>
@@ -61,7 +67,7 @@ export default async function SettingsPage() {
           <div className="flex items-center justify-between py-1">
             <div>
               <p className="text-sm font-medium text-neutral-900">Role</p>
-              <p className="text-sm text-neutral-500 capitalize">{currentAdmin?.role ?? "—"}</p>
+              <p className="text-sm text-neutral-500 capitalize">{currentAdmin?.role?.replace("_", " ") ?? "—"}</p>
             </div>
           </div>
           <Separator />
@@ -74,7 +80,17 @@ export default async function SettingsPage() {
         </CardContent>
       </Card>
 
-      {adminRole === "admin" && (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Change Password</CardTitle>
+          <CardDescription>Update your login password.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ChangePasswordForm />
+        </CardContent>
+      </Card>
+
+      {adminRole === "super_admin" && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Admin Access</CardTitle>
@@ -86,7 +102,7 @@ export default async function SettingsPage() {
           <CardContent className="p-0 px-6">
             {allAdmins && allAdmins.length > 0 ? (
               <AdminAccessForm
-                admins={allAdmins as { id: string; username: string; full_name: string | null; role: "admin" | "editor" }[]}
+                admins={allAdmins as { id: string; username: string; display_name: string | null; role: "super_admin" | "admin" | "viewer" }[]}
                 currentAdminId={adminId}
               />
             ) : (

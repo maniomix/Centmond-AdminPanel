@@ -5,8 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Users,
-  ShoppingCart,
-  FileText,
+  ShieldCheck,
   Settings,
   Activity,
   ChevronRight,
@@ -25,17 +24,12 @@ const navItems = [
     icon: Users,
   },
   {
-    label: "Orders",
-    href: "/admin/orders",
-    icon: ShoppingCart,
+    label: "Subscriptions",
+    href: "/admin/subscriptions",
+    icon: ShieldCheck,
   },
   {
-    label: "Content",
-    href: "/admin/content",
-    icon: FileText,
-  },
-  {
-    label: "Activity Logs",
+    label: "Activity",
     href: "/admin/activity-logs",
     icon: Activity,
   },

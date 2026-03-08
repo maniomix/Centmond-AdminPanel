@@ -64,6 +64,44 @@ CREATE TABLE public.content (
 );
 
 -- =============================================================
+-- TRANSACTIONS TABLE
+-- =============================================================
+CREATE TYPE transaction_type AS ENUM ('credit', 'debit', 'deposit', 'withdrawal', 'refund');
+CREATE TYPE transaction_status AS ENUM ('pending', 'completed', 'failed', 'cancelled');
+
+CREATE TABLE public.transactions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  amount NUMERIC(12, 2) NOT NULL,
+  type transaction_type NOT NULL,
+  status transaction_status NOT NULL DEFAULT 'pending',
+  description TEXT,
+  reference TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_transactions_user_id ON public.transactions(user_id);
+CREATE INDEX idx_transactions_status ON public.transactions(status);
+CREATE INDEX idx_transactions_created_at ON public.transactions(created_at DESC);
+
+CREATE TRIGGER set_updated_at_transactions
+  BEFORE UPDATE ON public.transactions
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- Enable realtime for transactions
+ALTER PUBLICATION supabase_realtime ADD TABLE public.transactions;
+
+-- RLS for transactions
+ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Admins manage transactions" ON public.transactions
+  FOR ALL USING (public.is_admin());
+
+CREATE POLICY "Users read own transactions" ON public.transactions
+  FOR SELECT USING (auth.uid() = user_id);
+
+-- =============================================================
 -- ACTIVITY LOGS TABLE
 -- =============================================================
 CREATE TABLE public.activity_logs (
@@ -131,6 +169,13 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- =============================================================
+-- ENABLE REALTIME
+-- Run these if not already enabled via Supabase dashboard
+-- =============================================================
+ALTER PUBLICATION supabase_realtime ADD TABLE public.users;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.orders;
 
 -- =============================================================
 -- ROW LEVEL SECURITY (RLS)
