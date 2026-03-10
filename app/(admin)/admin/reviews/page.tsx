@@ -1,16 +1,21 @@
-import { createAdminClient } from "@/lib/supabase/admin";
 import { parsePage } from "@/lib/table-params";
 import { requirePermission } from "@/lib/admin/permissions";
 import { PageHeader } from "@/components/shared/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { ReviewQueueTable } from "@/components/admin/reviews/review-queue-table";
+import { listReviewQueueData } from "@/lib/admin/services/reviews";
 
 export const revalidate = 0;
 
-type QueueFilter = "all" | "under_review" | "flagged" | "high_risk";
+type QueueFilter = "all" | "under_review" | "escalated" | "restricted" | "resolved";
 
 function parseQueue(value: string | undefined): QueueFilter {
-  if (value === "under_review" || value === "flagged" || value === "high_risk") {
+  if (
+    value === "under_review" ||
+    value === "escalated" ||
+    value === "restricted" ||
+    value === "resolved"
+  ) {
     return value;
   }
   return "all";
@@ -27,48 +32,25 @@ export default async function ReviewsPage({
   const pageSize = 20;
   const search = params.search?.trim().toLowerCase() ?? "";
   const queue = parseQueue(params.queue);
-  const supabase = createAdminClient();
-
-  const [{ data: users }, { data: flags }, { data: flagAssignments }] = await Promise.all([
-    supabase
-      .from("users")
-      .select("id, email, display_name, status, risk_score, risk_status, last_active_at, created_at"),
-    supabase.from("user_flags").select("id, label"),
-    supabase
-      .from("user_flag_assignments")
-      .select("user_id, flag_id, status")
-      .eq("status", "active"),
-  ]);
-
-  const flagLabelsById = new Map((flags ?? []).map((flag) => [flag.id, flag.label]));
-  const activeFlagsByUserId = new Map<string, string[]>();
-  for (const assignment of flagAssignments ?? []) {
-    const label = flagLabelsById.get(assignment.flag_id);
-    if (!label) continue;
-    const current = activeFlagsByUserId.get(assignment.user_id) ?? [];
-    current.push(label);
-    activeFlagsByUserId.set(assignment.user_id, current);
-  }
-
-  const allRows = (users ?? [])
-    .filter((user) => {
-      if (queue === "under_review") return user.status === "under_review";
-      if (queue === "flagged") return user.status === "flagged" || user.status === "banned";
-      if (queue === "high_risk") {
-        return (user.risk_score ?? 0) >= 70 || (activeFlagsByUserId.get(user.id)?.length ?? 0) > 0;
-      }
-      return (
-        user.status === "under_review" ||
-        user.status === "flagged" ||
-        user.status === "banned" ||
-        (user.risk_score ?? 0) >= 70 ||
-        (activeFlagsByUserId.get(user.id)?.length ?? 0) > 0
-      );
+  const allRows = (await listReviewQueueData())
+    .filter((item) => {
+      if (queue === "all") return true;
+      return item.status === queue;
     })
-    .map((user) => ({
-      ...user,
-      display_name: user.display_name?.trim() || "Unnamed User",
-      activeFlags: activeFlagsByUserId.get(user.id) ?? [],
+    .map((item) => ({
+      queueId: item.id,
+      id: item.user.id,
+      display_name: item.user.display_name?.trim() || "Unnamed User",
+      email: item.user.email,
+      userStatus: item.user.status,
+      queueStatus: item.status,
+      priority: item.priority,
+      risk_score: item.user.risk_score,
+      risk_status: item.user.risk_status,
+      activeFlags: item.activeFlags,
+      last_active_at: item.user.last_active_at,
+      created_at: item.user.created_at,
+      latestReason: item.latest_reason,
     }))
     .filter((user) => {
       if (!search) return true;
@@ -84,13 +66,9 @@ export default async function ReviewsPage({
     });
 
   const pagedRows = allRows.slice((page - 1) * pageSize, page * pageSize);
-  const underReviewCount = allRows.filter((user) => user.status === "under_review").length;
-  const flaggedCount = allRows.filter(
-    (user) => user.status === "flagged" || user.status === "banned"
-  ).length;
-  const highRiskCount = allRows.filter(
-    (user) => (user.risk_score ?? 0) >= 70 || user.activeFlags.length > 0
-  ).length;
+  const underReviewCount = allRows.filter((user) => user.queueStatus === "under_review").length;
+  const escalatedCount = allRows.filter((user) => user.queueStatus === "escalated").length;
+  const restrictedCount = allRows.filter((user) => user.queueStatus === "restricted").length;
 
   return (
     <div className="space-y-5">
@@ -108,14 +86,14 @@ export default async function ReviewsPage({
         </Card>
         <Card>
           <CardContent className="p-4">
-            <p className="text-xs uppercase tracking-wide text-neutral-500">Flagged / Banned</p>
-            <p className="mt-2 text-2xl font-semibold text-neutral-900">{flaggedCount}</p>
+            <p className="text-xs uppercase tracking-wide text-neutral-500">Escalated</p>
+            <p className="mt-2 text-2xl font-semibold text-neutral-900">{escalatedCount}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
-            <p className="text-xs uppercase tracking-wide text-neutral-500">High Risk Signals</p>
-            <p className="mt-2 text-2xl font-semibold text-neutral-900">{highRiskCount}</p>
+            <p className="text-xs uppercase tracking-wide text-neutral-500">Restricted</p>
+            <p className="mt-2 text-2xl font-semibold text-neutral-900">{restrictedCount}</p>
           </CardContent>
         </Card>
       </div>

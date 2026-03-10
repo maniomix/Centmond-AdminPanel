@@ -320,6 +320,170 @@ export type SavedViewRow = {
   updated_at: string;
 };
 
+export type UserDeviceRow = {
+  id: string;
+  user_id: string;
+  device_fingerprint: string;
+  device_label: string | null;
+  platform: string | null;
+  os: string | null;
+  browser: string | null;
+  model: string | null;
+  metadata: Json | null;
+  first_seen_at: string;
+  last_seen_at: string;
+  last_ip_address: string | null;
+  last_country_code: string | null;
+  last_region: string | null;
+  is_suspicious: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type UserSessionRow = {
+  id: string;
+  user_id: string;
+  device_id: string | null;
+  session_token_hash: string | null;
+  session_label: string | null;
+  ip_address: string | null;
+  country_code: string | null;
+  region: string | null;
+  user_agent: string | null;
+  status: "active" | "revoked" | "expired" | "suspicious";
+  started_at: string;
+  last_seen_at: string;
+  expires_at: string | null;
+  ended_at: string | null;
+  revoked_at: string | null;
+  revoked_reason: string | null;
+  revoked_by_admin_id: string | null;
+  require_reauth: boolean;
+  metadata: Json | null;
+  created_at: string;
+};
+
+export type FinanceEventRow = {
+  id: string;
+  user_id: string | null;
+  subscription_id: string | null;
+  transaction_id: string | null;
+  actor_admin_id: string | null;
+  event_type: string;
+  status: "recorded" | "pending_provider_action" | "resolved" | "cancelled";
+  amount: number | null;
+  currency: string;
+  provider: string | null;
+  reference_id: string | null;
+  reason: string | null;
+  note: string | null;
+  metadata: Json | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SupportHandoffRow = {
+  id: string;
+  user_id: string;
+  from_admin_id: string | null;
+  to_admin_id: string | null;
+  status: "open" | "in_progress" | "resolved";
+  priority: string;
+  summary: string;
+  details: string | null;
+  created_at: string;
+  updated_at: string;
+  resolved_at: string | null;
+};
+
+export type BulkJobRow = {
+  id: string;
+  created_by_admin_id: string | null;
+  job_type: string;
+  target_scope: string;
+  status: "queued" | "processing" | "completed" | "partially_completed" | "failed";
+  reason: string | null;
+  input: Json;
+  result: Json | null;
+  error_message: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  failed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ExportJobRow = {
+  id: string;
+  created_by_admin_id: string | null;
+  export_type: string;
+  target_scope: string;
+  status: "queued" | "processing" | "completed" | "failed" | "expired";
+  format: string;
+  filters: Json | null;
+  row_count: number | null;
+  file_name: string | null;
+  reason: string | null;
+  content: string | null;
+  metadata: Json | null;
+  error_message: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  failed_at: string | null;
+  expires_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type FeatureFlagRow = {
+  key: string;
+  label: string;
+  description: string | null;
+  enabled: boolean;
+  rollout_percentage: number;
+  audience_filters: Json | null;
+  updated_by_admin_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type InternalSettingRow = {
+  key: string;
+  label: string;
+  description: string | null;
+  value: Json;
+  is_sensitive: boolean;
+  updated_by_admin_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ReviewQueueItemRow = {
+  id: string;
+  user_id: string;
+  status:
+    | "under_review"
+    | "escalated"
+    | "approved"
+    | "rejected"
+    | "restricted"
+    | "false_positive"
+    | "resolved";
+  priority: string;
+  source: string | null;
+  created_by_admin_id: string | null;
+  assigned_to_admin_id: string | null;
+  last_decided_by_admin_id: string | null;
+  risk_score_snapshot: number | null;
+  latest_reason: string | null;
+  metadata: Json | null;
+  opened_at: string;
+  last_decided_at: string | null;
+  resolved_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -502,6 +666,175 @@ export type Database = {
         Row: SavedViewRow;
         Insert: Omit<SavedViewRow, "id" | "created_at" | "updated_at">;
         Update: Partial<Omit<SavedViewRow, "id" | "created_at">>;
+        Relationships: [];
+      };
+      user_devices: {
+        Row: UserDeviceRow;
+        Insert: {
+          user_id: string;
+          device_fingerprint: string;
+          device_label?: string | null;
+          platform?: string | null;
+          os?: string | null;
+          browser?: string | null;
+          model?: string | null;
+          metadata?: Json | null;
+          first_seen_at?: string;
+          last_seen_at?: string;
+          last_ip_address?: string | null;
+          last_country_code?: string | null;
+          last_region?: string | null;
+          is_suspicious?: boolean;
+        };
+        Update: Partial<Omit<UserDeviceRow, "id" | "user_id" | "created_at">>;
+        Relationships: [];
+      };
+      user_sessions: {
+        Row: UserSessionRow;
+        Insert: {
+          user_id: string;
+          device_id?: string | null;
+          session_token_hash?: string | null;
+          session_label?: string | null;
+          ip_address?: string | null;
+          country_code?: string | null;
+          region?: string | null;
+          user_agent?: string | null;
+          status?: UserSessionRow["status"];
+          started_at?: string;
+          last_seen_at?: string;
+          expires_at?: string | null;
+          ended_at?: string | null;
+          revoked_at?: string | null;
+          revoked_reason?: string | null;
+          revoked_by_admin_id?: string | null;
+          require_reauth?: boolean;
+          metadata?: Json | null;
+        };
+        Update: Partial<Omit<UserSessionRow, "id" | "user_id" | "created_at">>;
+        Relationships: [];
+      };
+      finance_events: {
+        Row: FinanceEventRow;
+        Insert: {
+          user_id?: string | null;
+          subscription_id?: string | null;
+          transaction_id?: string | null;
+          actor_admin_id?: string | null;
+          event_type: string;
+          status?: FinanceEventRow["status"];
+          amount?: number | null;
+          currency?: string;
+          provider?: string | null;
+          reference_id?: string | null;
+          reason?: string | null;
+          note?: string | null;
+          metadata?: Json | null;
+        };
+        Update: Partial<Omit<FinanceEventRow, "id" | "created_at">>;
+        Relationships: [];
+      };
+      support_handoffs: {
+        Row: SupportHandoffRow;
+        Insert: {
+          user_id: string;
+          from_admin_id?: string | null;
+          to_admin_id?: string | null;
+          status?: SupportHandoffRow["status"];
+          priority?: string;
+          summary: string;
+          details?: string | null;
+          resolved_at?: string | null;
+        };
+        Update: Partial<Omit<SupportHandoffRow, "id" | "created_at">>;
+        Relationships: [];
+      };
+      bulk_jobs: {
+        Row: BulkJobRow;
+        Insert: {
+          created_by_admin_id?: string | null;
+          job_type: string;
+          target_scope?: string;
+          status?: BulkJobRow["status"];
+          reason?: string | null;
+          input: Json;
+          result?: Json | null;
+          error_message?: string | null;
+          started_at?: string | null;
+          completed_at?: string | null;
+          failed_at?: string | null;
+        };
+        Update: Partial<Omit<BulkJobRow, "id" | "created_at">>;
+        Relationships: [];
+      };
+      export_jobs: {
+        Row: ExportJobRow;
+        Insert: {
+          created_by_admin_id?: string | null;
+          export_type: string;
+          target_scope: string;
+          status?: ExportJobRow["status"];
+          format?: string;
+          filters?: Json | null;
+          row_count?: number | null;
+          file_name?: string | null;
+          reason?: string | null;
+          content?: string | null;
+          metadata?: Json | null;
+          error_message?: string | null;
+          started_at?: string | null;
+          completed_at?: string | null;
+          failed_at?: string | null;
+          expires_at?: string | null;
+        };
+        Update: Partial<Omit<ExportJobRow, "id" | "created_at">>;
+        Relationships: [];
+      };
+      feature_flags: {
+        Row: FeatureFlagRow;
+        Insert: {
+          key: string;
+          label: string;
+          description?: string | null;
+          enabled?: boolean;
+          rollout_percentage?: number;
+          audience_filters?: Json | null;
+          updated_by_admin_id?: string | null;
+        };
+        Update: Partial<Omit<FeatureFlagRow, "key" | "created_at">>;
+        Relationships: [];
+      };
+      internal_settings: {
+        Row: InternalSettingRow;
+        Insert: {
+          key: string;
+          label: string;
+          description?: string | null;
+          value?: Json;
+          is_sensitive?: boolean;
+          updated_by_admin_id?: string | null;
+        };
+        Update: Partial<Omit<InternalSettingRow, "key" | "created_at">>;
+        Relationships: [];
+      };
+      review_queue_items: {
+        Row: ReviewQueueItemRow;
+        Insert: {
+          user_id: string;
+          status?: ReviewQueueItemRow["status"];
+          priority?: string;
+          source?: string | null;
+          created_by_admin_id?: string | null;
+          assigned_to_admin_id?: string | null;
+          last_decided_by_admin_id?: string | null;
+          risk_score_snapshot?: number | null;
+          latest_reason?: string | null;
+          metadata?: Json | null;
+          opened_at?: string;
+          last_decided_at?: string | null;
+          resolved_at?: string | null;
+        };
+        Update: Partial<Omit<ReviewQueueItemRow, "id" | "user_id" | "created_at">>;
         Relationships: [];
       };
       // Legacy/optional

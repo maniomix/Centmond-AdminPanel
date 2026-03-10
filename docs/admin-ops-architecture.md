@@ -18,8 +18,8 @@ Use the newer docs for day-to-day maintainer guidance:
 ## Immediate Priorities
 
 - Phase 1: auth/session hardening, unified permission enforcement, fail-closed audits for critical mutations, docs, tests
-- Phase 2: finance, real user sessions/devices, bulk jobs, feature flags, internal settings, support handoffs
-- Phase 3: approvals, exports, impersonation, advanced risk and watchlists
+- Phase 2: finance, real user sessions/devices, bulk jobs, exports center, feature flags, internal settings, support handoffs
+- Phase 3: approvals, impersonation, advanced risk and watchlists
 
 ## Existing Real Modules
 
@@ -27,11 +27,15 @@ Use the newer docs for day-to-day maintainer guidance:
 - users and user detail
 - admins and admin detail
 - subscriptions
+- finance
 - reviews
 - search
 - segments
+- exports
 - audit logs
 - activity logs
+- feature flags
+- internal settings
 - self-service settings
 
 ## Redirect Shells To Keep Hidden Until Ready

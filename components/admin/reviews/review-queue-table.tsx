@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { DataTable } from "@/components/shared/data-table";
@@ -7,17 +8,24 @@ import { Pagination } from "@/components/shared/pagination";
 import { SearchFilter } from "@/components/shared/search-filter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ReasonDialog } from "@/components/admin/actions/reason-dialog";
 import { formatDateShort } from "@/lib/utils";
+import { toast } from "sonner";
+import { updateReviewQueueItemAction } from "@/app/(admin)/admin/reviews/actions";
 
 interface ReviewQueueRow {
   id: string;
+  queueId: string;
   display_name: string;
   email: string;
-  status: string;
+  userStatus: string;
+  queueStatus: string;
+  priority: string;
   risk_score: number;
   risk_status: string | null;
   activeFlags: string[];
   last_active_at: string | null;
+  latestReason?: string | null;
 }
 
 interface ReviewQueueTableProps {
@@ -31,16 +39,21 @@ interface ReviewQueueTableProps {
 
 const queueOptions = [
   { label: "Under Review", value: "under_review" },
-  { label: "Flagged", value: "flagged" },
-  { label: "High Risk", value: "high_risk" },
+  { label: "Escalated", value: "escalated" },
+  { label: "Restricted", value: "restricted" },
+  { label: "Resolved", value: "resolved" },
   { label: "All", value: "all" },
 ];
 
-const statusVariant: Record<string, "warning" | "destructive" | "secondary" | "info"> = {
+const statusVariant: Record<
+  string,
+  "warning" | "destructive" | "secondary" | "info" | "success"
+> = {
   under_review: "warning",
-  flagged: "destructive",
-  banned: "destructive",
-  active: "secondary",
+  escalated: "info",
+  restricted: "destructive",
+  resolved: "secondary",
+  approved: "success",
 };
 
 export function ReviewQueueTable({
@@ -54,6 +67,10 @@ export function ReviewQueueTable({
   const router = useRouter();
   const pathname = usePathname();
   const totalPages = Math.ceil(count / pageSize);
+  const [pendingDecision, setPendingDecision] = useState<{
+    userId: string;
+    nextStatus: "escalated" | "restricted" | "approved" | "resolved";
+  } | null>(null);
 
   function buildUrl(overrides: Record<string, string>) {
     const params = new URLSearchParams({
@@ -77,12 +94,17 @@ export function ReviewQueueTable({
       ),
     },
     {
-      key: "status",
+      key: "queueStatus",
       label: "Queue State",
       render: (row: ReviewQueueRow) => (
-        <Badge variant={statusVariant[row.status] ?? "secondary"} className="capitalize">
-          {row.status.replace(/_/g, " ")}
-        </Badge>
+        <div className="space-y-1">
+          <Badge variant={statusVariant[row.queueStatus] ?? "secondary"} className="capitalize">
+            {row.queueStatus.replace(/_/g, " ")}
+          </Badge>
+          <p className="text-xs text-neutral-500 capitalize">
+            {row.priority} priority • user {row.userStatus.replace(/_/g, " ")}
+          </p>
+        </div>
       ),
     },
     {
@@ -128,11 +150,28 @@ export function ReviewQueueTable({
     {
       key: "actions",
       label: "",
-      className: "w-28",
+      className: "w-56",
       render: (row: ReviewQueueRow) => (
-        <Button variant="outline" size="sm" asChild>
-          <Link href={`/admin/users/${row.id}`}>Open</Link>
-        </Button>
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button variant="outline" size="sm" asChild>
+            <Link href={`/admin/users/${row.id}`}>Open</Link>
+          </Button>
+          {row.queueStatus !== "escalated" ? (
+            <Button variant="ghost" size="sm" onClick={() => setPendingDecision({ userId: row.id, nextStatus: "escalated" })}>
+              Escalate
+            </Button>
+          ) : null}
+          {row.queueStatus !== "restricted" ? (
+            <Button variant="ghost" size="sm" onClick={() => setPendingDecision({ userId: row.id, nextStatus: "restricted" })}>
+              Restrict
+            </Button>
+          ) : null}
+          {row.queueStatus !== "approved" ? (
+            <Button variant="ghost" size="sm" onClick={() => setPendingDecision({ userId: row.id, nextStatus: "approved" })}>
+              Approve
+            </Button>
+          ) : null}
+        </div>
       ),
     },
   ];
@@ -154,6 +193,41 @@ export function ReviewQueueTable({
         onPageChange={(nextPage) => router.push(buildUrl({ page: String(nextPage) }))}
         count={count}
         pageSize={pageSize}
+      />
+      <ReasonDialog
+        open={Boolean(pendingDecision)}
+        onOpenChange={(open) => {
+          if (!open) setPendingDecision(null);
+        }}
+        title={
+          pendingDecision
+            ? `Move queue item to ${pendingDecision.nextStatus.replace(/_/g, " ")}`
+            : "Update queue"
+        }
+        description="Review decisions are fully audited and enforced server-side."
+        confirmLabel="Save decision"
+        loadingLabel="Saving..."
+        onConfirm={async (reason) => {
+          if (!pendingDecision) return;
+          const result = await updateReviewQueueItemAction({
+            userId: pendingDecision.userId,
+            status: pendingDecision.nextStatus,
+            priority:
+              pendingDecision.nextStatus === "restricted"
+                ? "high"
+                : pendingDecision.nextStatus === "escalated"
+                  ? "high"
+                  : "normal",
+            reason,
+          });
+          if ("error" in result && result.error) {
+            toast.error(result.error);
+            return;
+          }
+          toast.success("Review queue updated");
+          setPendingDecision(null);
+          router.refresh();
+        }}
       />
     </div>
   );

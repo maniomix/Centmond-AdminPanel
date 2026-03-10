@@ -6,6 +6,10 @@ import { auditWithCurrentAdmin } from "@/lib/admin/audit";
 import { runAdminMutation, toAdminActionError } from "@/lib/admin/mutations";
 import { requirePermission } from "@/lib/admin/permissions";
 import { assertSameOriginMutation } from "@/lib/admin/security";
+import { bulkJobInputSchema } from "@/lib/admin/schemas/phase2";
+import { createBulkJob, updateBulkJobState } from "@/lib/admin/services/bulk-jobs";
+import { upsertReviewQueueItem } from "@/lib/admin/services/reviews";
+import type { Json } from "@/types/database";
 import type { SubscriptionRow, UserRow } from "@/types";
 
 type UserUpdateValues = Pick<
@@ -407,89 +411,143 @@ export async function updateUserStatusAction(
   }
 }
 
-type BulkUserActionInput =
-  | {
-      action: "suspend" | "reactivate" | "mark_under_review";
-      userIds: string[];
-      reason: string;
-    }
-  | {
-      action: "add_tag";
-      userIds: string[];
-      reason: string;
-      tagId: string;
-    };
-
 export async function runBulkUserActionAction(
-  input: BulkUserActionInput
-): Promise<{ error?: string; affectedCount?: number }> {
-  await assertSameOriginMutation();
-  if (!input.reason.trim()) {
-    return { error: "Reason is required" };
+  input: unknown
+): Promise<{ error?: string; affectedCount?: number; jobId?: string }> {
+  let parsed: ReturnType<typeof bulkJobInputSchema.parse>;
+  try {
+    parsed = bulkJobInputSchema.parse(input);
+  } catch {
+    return { error: "Invalid bulk action payload" };
   }
 
-  const userIds = Array.from(new Set(input.userIds.filter(Boolean)));
-  if (!userIds.length) {
-    return { error: "Select at least one user" };
-  }
+  try {
+    return await runAdminMutation({
+      permission: "bulk_actions.run",
+      requireRecentAuth: true,
+      execute: async (actor) => {
+        const userIds = Array.from(new Set(parsed.userIds.filter(Boolean)));
+        if (!userIds.length) {
+          throw new Error("Select at least one user");
+        }
 
-  const supabase = createAdminClient();
+        if (parsed.action === "add_tag" && !actor.permissions.has("tags.manage")) {
+          throw new Error("Permission denied: tags.manage");
+        }
 
-  if (input.action === "add_tag") {
-    await requirePermission("tags.manage");
-    const tagId = input.tagId?.trim();
-    if (!tagId) return { error: "Tag is required" };
-    const rows = userIds.map((userId) => ({
-      user_id: userId,
-      tag_id: tagId,
-    }));
-    const { error } = await supabase.from("user_tag_assignments").upsert(rows);
-    if (error) return { error: error.message };
+        const nextStatusMap = {
+          suspend: "suspended",
+          reactivate: "active",
+          mark_under_review: "under_review",
+        } as const;
 
-    await auditWithCurrentAdmin({
-      actionType: "users.bulk.tag_added",
-      category: "bulk",
-      targetEntityType: "user_batch",
-      targetSummary: `${userIds.length} users`,
-      reason: input.reason,
-      afterState: { tagId, userIds },
-      metadata: { affectedCount: userIds.length },
+        if (
+          parsed.action !== "add_tag" &&
+          !actor.permissions.has(resolveStatusPermission(nextStatusMap[parsed.action]))
+        ) {
+          throw new Error(`Permission denied: ${resolveStatusPermission(nextStatusMap[parsed.action])}`);
+        }
+
+        const job = await createBulkJob({
+          createdByAdminId: actor.id,
+          jobType: `users.${parsed.action}`,
+          reason: parsed.reason,
+          payload: parsed as Json,
+        });
+        await updateBulkJobState(job.id, {
+          status: "processing",
+          startedAt: new Date().toISOString(),
+        });
+
+        const supabase = createAdminClient();
+        let affectedCount = 0;
+
+        try {
+          if (parsed.action === "add_tag") {
+            const rows = userIds.map((userId) => ({
+              user_id: userId,
+              tag_id: parsed.tagId,
+              assigned_by_admin_id: actor.id,
+            }));
+            const { error } = await supabase.from("user_tag_assignments").upsert(rows);
+            if (error) throw new Error(error.message);
+            affectedCount = userIds.length;
+          } else {
+            const nextStatus = nextStatusMap[parsed.action];
+            const payload = {
+              status: nextStatus,
+              updated_at: new Date().toISOString(),
+            };
+            const { error } = await supabase.from("users").update(payload).in("id", userIds);
+            if (error) throw new Error(error.message);
+            affectedCount = userIds.length;
+
+            if (nextStatus === "under_review") {
+              await Promise.all(
+                userIds.map((userId) =>
+                  upsertReviewQueueItem({
+                    userId,
+                    status: "under_review",
+                    priority: "normal",
+                    reason: parsed.reason,
+                    actorAdminId: actor.id,
+                  })
+                )
+              );
+            }
+          }
+
+          const resultPayload = {
+            affectedCount,
+            userIds,
+            action: parsed.action,
+            ...(parsed.action === "add_tag" ? { tagId: parsed.tagId } : {}),
+          };
+          await updateBulkJobState(job.id, {
+            status: "completed",
+            completedAt: new Date().toISOString(),
+            result: resultPayload,
+          });
+
+          return {
+            value: { affectedCount, jobId: job.id },
+            audit: {
+              actionType:
+                parsed.action === "add_tag"
+                  ? "users.bulk.tag_added"
+                  : `users.bulk.status_changed.${nextStatusMap[parsed.action]}`,
+              category:
+                parsed.action === "mark_under_review"
+                  ? "risk"
+                  : "bulk",
+              severity:
+                parsed.action === "suspend"
+                  ? "warning"
+                  : "info",
+              targetEntityType: "bulk_job",
+              targetEntityId: job.id,
+              targetSummary: `${userIds.length} users`,
+              reason: parsed.reason,
+              afterState: resultPayload,
+              metadata: { bulkJobId: job.id },
+            },
+            revalidatePaths: ["/admin/users", "/admin/reviews", "/admin/segments"],
+          };
+        } catch (error) {
+          await updateBulkJobState(job.id, {
+            status: "failed",
+            failedAt: new Date().toISOString(),
+            errorMessage: error instanceof Error ? error.message : "Unknown bulk job failure",
+            result: {
+              userIds,
+              action: parsed.action,
+            },
+          });
+          throw error;
+        }
+      },
     });
-
-    revalidatePath("/admin/users");
-    revalidatePath("/admin/segments");
-    return { affectedCount: userIds.length };
+  } catch (error) {
+    return toAdminActionError(error, "Failed to run bulk user action");
   }
-
-  const nextStatusMap = {
-    suspend: "suspended",
-    reactivate: "active",
-    mark_under_review: "under_review",
-  } as const;
-
-  const nextStatus = nextStatusMap[input.action];
-  await requirePermission(resolveStatusPermission(nextStatus));
-  const payload = {
-    status: nextStatus,
-    updated_at: new Date().toISOString(),
-  };
-
-  const { error } = await supabase.from("users").update(payload).in("id", userIds);
-  if (error) return { error: error.message };
-
-  await auditWithCurrentAdmin({
-    actionType: `users.bulk.status_changed.${nextStatus}`,
-    category: input.action === "mark_under_review" ? "risk" : "bulk",
-    severity: nextStatus === "suspended" ? "warning" : "info",
-    targetEntityType: "user_batch",
-    targetSummary: `${userIds.length} users`,
-    reason: input.reason,
-    afterState: { status: nextStatus, userIds },
-    metadata: { affectedCount: userIds.length },
-  });
-
-  revalidatePath("/admin/users");
-  revalidatePath("/admin/reviews");
-  revalidatePath("/admin/segments");
-  return { affectedCount: userIds.length };
 }

@@ -8,6 +8,7 @@ Internal admin operations platform built on the existing `Next.js + React + Type
 - DB-backed admin sessions and login-attempt tracking
 - Role-based admin permissions
 - Admin modules for users, admins, subscriptions, reviews, search, segments, audit logs, activity logs, and self-service settings
+- Phase 2 modules for finance, exports, feature flags, internal settings, support handoffs, and real user security inventory
 - User notes, tags, flags, saved views, and review tooling
 - Audit logging with fail-closed support for critical mutations
 - Shared mutation wrapper for hardened admin actions
@@ -71,6 +72,7 @@ Current admin ops schema lives in:
 
 - [supabase/migrations/20260310_phase1_admin_ops.sql](/Users/mani/Desktop/Centmond-AdminPanel/supabase/migrations/20260310_phase1_admin_ops.sql)
 - [supabase/migrations/20260310_phase1_hardening_followup.sql](/Users/mani/Desktop/Centmond-AdminPanel/supabase/migrations/20260310_phase1_hardening_followup.sql)
+- [supabase/migrations/20260310_phase2_ops_foundations.sql](/Users/mani/Desktop/Centmond-AdminPanel/supabase/migrations/20260310_phase2_ops_foundations.sql)
 
 Apply them through your existing Supabase workflow before expecting:
 
@@ -78,6 +80,7 @@ Apply them through your existing Supabase workflow before expecting:
 - `admin_roles` / `admin_permissions`
 - `admin_sessions.last_sensitive_auth_at`
 - the expanded permission set
+- Phase 2 ops tables such as `user_sessions`, `user_devices`, `finance_events`, `bulk_jobs`, `export_jobs`, `feature_flags`, `internal_settings`, and `review_queue_items`
 
 If migrations are not applied, optional audit writes will be skipped in dev, but critical fail-closed mutations may still reject.
 
@@ -150,11 +153,15 @@ Real modules today:
 - `/admin/admins`
 - `/admin/admins/[id]`
 - `/admin/subscriptions`
+- `/admin/finance`
 - `/admin/reviews`
 - `/admin/search`
 - `/admin/segments`
 - `/admin/audit-logs`
 - `/admin/activity-logs`
+- `/admin/exports`
+- `/admin/feature-flags`
+- `/admin/internal-settings`
 - `/admin/settings`
 
 Current redirect shells:
@@ -168,9 +175,12 @@ These should stay hidden or clearly treated as placeholders until they are backe
 ## Documentation Map
 
 - [docs/architecture/overview.md](/Users/mani/Desktop/Centmond-AdminPanel/docs/architecture/overview.md)
+- [docs/architecture/finance-and-ops-modules.md](/Users/mani/Desktop/Centmond-AdminPanel/docs/architecture/finance-and-ops-modules.md)
 - [docs/operations/local-setup.md](/Users/mani/Desktop/Centmond-AdminPanel/docs/operations/local-setup.md)
+- [docs/operations/review-support-workflows.md](/Users/mani/Desktop/Centmond-AdminPanel/docs/operations/review-support-workflows.md)
 - [docs/operations/troubleshooting.md](/Users/mani/Desktop/Centmond-AdminPanel/docs/operations/troubleshooting.md)
 - [docs/security/admin-security.md](/Users/mani/Desktop/Centmond-AdminPanel/docs/security/admin-security.md)
+- [docs/security/data-access-and-exports.md](/Users/mani/Desktop/Centmond-AdminPanel/docs/security/data-access-and-exports.md)
 - [docs/admin-ops-architecture.md](/Users/mani/Desktop/Centmond-AdminPanel/docs/admin-ops-architecture.md)
 
 ## Deployment Notes

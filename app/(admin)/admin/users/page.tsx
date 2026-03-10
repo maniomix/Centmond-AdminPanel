@@ -11,6 +11,7 @@ import {
 import { hasPermission, requirePermission } from "@/lib/admin/permissions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { listRecentBulkJobs } from "@/lib/admin/services/bulk-jobs";
 
 export const revalidate = 0;
 const ONLINE_WINDOW_SECONDS = 12;
@@ -66,26 +67,30 @@ export default async function UsersPage({
   const sessionLookbackSinceIso = buildLookbackIso(SESSION_STATE_LOOKBACK_HOURS);
   const userActivitySinceIso = buildLookbackIso(USER_ACTIVITY_LOOKBACK_HOURS);
 
-  const [{ data: sessionStateRows }, { data: recentEventRows }, { data: allTags }] = await Promise.all([
-    supabase
-      .from("events")
-      .select("user_id,session_id,event_name,created_at")
-      .not("user_id", "is", null)
-      .in("event_name", [...USER_SESSION_STATE_EVENTS])
-      .gte("created_at", sessionLookbackSinceIso)
-      .order("created_at", { ascending: false })
-      .limit(3000),
-    supabase
-      .from("events")
-      .select("user_id,session_id,event_name,created_at")
-      .not("user_id", "is", null)
-      .gte("created_at", onlineSinceIso)
-      .order("created_at", { ascending: false })
-      .limit(3000),
-    hasPermission(adminContext, "tags.manage")
-      ? supabase.from("user_tags").select("id, key, label, color").order("label")
-      : Promise.resolve({ data: [] }),
-  ]);
+  const [{ data: sessionStateRows }, { data: recentEventRows }, { data: allTags }, recentBulkJobs] =
+    await Promise.all([
+      supabase
+        .from("events")
+        .select("user_id,session_id,event_name,created_at")
+        .not("user_id", "is", null)
+        .in("event_name", [...USER_SESSION_STATE_EVENTS])
+        .gte("created_at", sessionLookbackSinceIso)
+        .order("created_at", { ascending: false })
+        .limit(3000),
+      supabase
+        .from("events")
+        .select("user_id,session_id,event_name,created_at")
+        .not("user_id", "is", null)
+        .gte("created_at", onlineSinceIso)
+        .order("created_at", { ascending: false })
+        .limit(3000),
+      hasPermission(adminContext, "tags.manage")
+        ? supabase.from("user_tags").select("id, key, label, color").order("label")
+        : Promise.resolve({ data: [] }),
+      hasPermission(adminContext, "bulk_actions.run")
+        ? listRecentBulkJobs(3)
+        : Promise.resolve([]),
+    ]);
 
   const onlineUserIds = buildOnlineUserIds({
     sessionStateRows: (sessionStateRows ?? []).map((row) => ({
@@ -312,6 +317,35 @@ export default async function UsersPage({
           </CardContent>
         </Card>
       </div>
+      {recentBulkJobs.length ? (
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-neutral-900">Recent Bulk Jobs</p>
+                <p className="text-xs text-neutral-500">
+                  Job-backed bulk mutations with result and failure tracking.
+                </p>
+              </div>
+              <Badge variant="secondary">{recentBulkJobs.length} recent</Badge>
+            </div>
+            <div className="mt-3 grid gap-3 md:grid-cols-3">
+              {recentBulkJobs.map((job) => (
+                <div key={job.id} className="rounded-lg border border-neutral-200 bg-white p-3">
+                  <p className="text-sm font-medium text-neutral-900">{job.job_type}</p>
+                  <p className="mt-1 text-xs text-neutral-500">{job.reason ?? "No reason"}</p>
+                  <p className="mt-2 text-xs uppercase tracking-wide text-neutral-400">
+                    {job.status}
+                  </p>
+                  {job.error_message ? (
+                    <p className="mt-1 text-xs text-red-600">{job.error_message}</p>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
       <UsersTable
         users={usersWithEffectiveLastSeen}
         count={count ?? 0}

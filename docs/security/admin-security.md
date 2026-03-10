@@ -38,3 +38,9 @@ Shared mutation wrapper responsibilities:
 - MFA rollout is only architecture-ready, not fully enforced
 - approvals and impersonation are future phases
 - finance/export approval workflows are not complete yet
+
+## Phase 2 Additions
+
+- export download routes validate admin session and permission on every request
+- high-risk config surfaces now live outside self-service settings
+- user session/device views are backed by dedicated tables instead of only inferred event streams

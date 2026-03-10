@@ -13,6 +13,10 @@ import {
   Search,
   Shield,
   FileSearch,
+  FileDown,
+  SlidersHorizontal,
+  ToggleLeft,
+  Wallet,
   ChevronRight,
   AlertTriangle,
 } from "lucide-react";
@@ -71,6 +75,13 @@ const navItems: NavItem[] = [
     anyPermissions: ["subscriptions.view"],
   },
   {
+    section: "Revenue",
+    label: "Finance",
+    href: "/admin/finance",
+    icon: Wallet,
+    anyPermissions: ["finance.manage", "billing.view"],
+  },
+  {
     section: "Security",
     label: "Admins",
     href: "/admin/admins",
@@ -90,6 +101,27 @@ const navItems: NavItem[] = [
     href: "/admin/audit-logs",
     icon: FileSearch,
     anyPermissions: ["audit_logs.view"],
+  },
+  {
+    section: "Configuration",
+    label: "Exports",
+    href: "/admin/exports",
+    icon: FileDown,
+    anyPermissions: ["exports.run"],
+  },
+  {
+    section: "Configuration",
+    label: "Feature Flags",
+    href: "/admin/feature-flags",
+    icon: ToggleLeft,
+    anyPermissions: ["feature_flags.manage"],
+  },
+  {
+    section: "Configuration",
+    label: "Internal Settings",
+    href: "/admin/internal-settings",
+    icon: SlidersHorizontal,
+    anyPermissions: ["internal_settings.manage"],
   },
   {
     section: "Configuration",

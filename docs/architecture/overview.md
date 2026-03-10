@@ -23,11 +23,15 @@ Keep as real modules:
 - users
 - admins
 - subscriptions
+- finance
 - reviews
 - search
 - segments
+- exports
 - audit logs
 - activity logs
+- feature flags
+- internal settings
 - dashboard
 - self-service settings
 
@@ -52,6 +56,7 @@ Treat as redirect shells until implemented:
 - finance module
 - real user sessions/devices
 - bulk jobs
+- exports center
 - support handoffs
 - feature flags
 - internal settings
@@ -59,7 +64,6 @@ Treat as redirect shells until implemented:
 ### Phase 3
 
 - approvals
-- export jobs
 - impersonation
 - advanced review/risk workflows
 - watchlists / alerts
@@ -68,6 +72,6 @@ Treat as redirect shells until implemented:
 
 - Overview: dashboard, global search
 - Operations: users, segments, reviews
-- Revenue: subscriptions, future finance, future orders
+- Revenue: subscriptions, finance, future orders
 - Security: admins, audit logs, activity logs
-- Configuration: settings, future feature flags, future internal settings, future exports
+- Configuration: settings, feature flags, internal settings, exports

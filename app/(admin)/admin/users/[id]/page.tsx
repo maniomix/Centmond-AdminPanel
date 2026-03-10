@@ -27,6 +27,9 @@ import { UserFlagsPanel } from "@/components/admin/notes/user-flags-panel";
 import { hasPermission, requirePermission } from "@/lib/admin/permissions";
 import { UserTimelinePanel } from "@/components/admin/users/user-timeline-panel";
 import { UserSecurityPanel } from "@/components/admin/users/user-security-panel";
+import { SupportHandoffsPanel } from "@/components/admin/users/support-handoffs-panel";
+import { listSupportHandoffsForUser, } from "@/lib/admin/services/reviews";
+import { listUserSecurityData } from "@/lib/admin/services/user-security";
 
 const planVariant: Record<string, "default" | "secondary" | "success"> = {
   free: "secondary",
@@ -98,6 +101,9 @@ export default async function UserDetailPage({
     { data: allFlags },
     { data: flagAssignments },
     { data: adminAuditLogs },
+    securityData,
+    supportHandoffs,
+    { data: adminDirectory },
   ] = await Promise.all([
     supabase
       .from("subscriptions")
@@ -158,6 +164,12 @@ export default async function UserDetailPage({
       .eq("target_entity_id", id)
       .order("created_at", { ascending: false })
       .limit(12),
+    listUserSecurityData(id),
+    listSupportHandoffsForUser(id),
+    supabase
+      .from("admin_users")
+      .select("id, username, display_name")
+      .order("username"),
   ]);
 
   const effectiveLastActiveAt = pickLatestIsoTimestamp(
@@ -174,22 +186,8 @@ export default async function UserDetailPage({
     .filter((tx) => tx.type === "expense")
     .reduce((sum, tx) => sum + Number(tx.amount ?? 0), 0);
   const net30d = income30d - expense30d;
-  const noteAuthorIds = Array.from(
-    new Set([
-      ...((notes ?? []).map((note) => note.author_admin_id).filter(Boolean) as string[]),
-      ...((adminAuditLogs ?? [])
-        .map((log) => log.actor_admin_id)
-        .filter(Boolean) as string[]),
-    ])
-  );
-  const { data: noteAuthors } = noteAuthorIds.length
-    ? await supabase
-        .from("admin_users")
-        .select("id, username, display_name")
-        .in("id", noteAuthorIds)
-    : { data: [] };
   const adminLabelById = new Map(
-    (noteAuthors ?? []).map((admin) => [admin.id, admin.display_name ?? admin.username])
+    (adminDirectory ?? []).map((admin) => [admin.id, admin.display_name ?? admin.username])
   );
   const tagsById = new Map((allTags ?? []).map((tag) => [tag.id, tag]));
   const assignedTags = (tagAssignments ?? [])
@@ -267,51 +265,6 @@ export default async function UserDetailPage({
   ]
     .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
     .slice(0, 24);
-  const sessionSignalMap = new Map<
-    string,
-    {
-      id: string;
-      sessionId: string | null;
-      device: string;
-      firstSeenAt: string;
-      lastSeenAt: string;
-      eventCount: number;
-      recentEvent: string;
-    }
-  >();
-  for (const event of recentEvents ?? []) {
-    const key =
-      event.session_id ??
-      `${deviceSummary(event.device_info, event.event_properties) ?? "unknown"}:${event.id}`;
-    const device = deviceSummary(event.device_info, event.event_properties) ?? "Unknown device";
-    const current = sessionSignalMap.get(key);
-    if (!current) {
-      sessionSignalMap.set(key, {
-        id: key,
-        sessionId: event.session_id,
-        device,
-        firstSeenAt: event.created_at,
-        lastSeenAt: event.created_at,
-        eventCount: 1,
-        recentEvent: humanizeValue(event.event_name),
-      });
-      continue;
-    }
-
-    current.eventCount += 1;
-    if (Date.parse(event.created_at) < Date.parse(current.firstSeenAt)) {
-      current.firstSeenAt = event.created_at;
-    }
-    if (Date.parse(event.created_at) > Date.parse(current.lastSeenAt)) {
-      current.lastSeenAt = event.created_at;
-      current.recentEvent = humanizeValue(event.event_name);
-    }
-    sessionSignalMap.set(key, current);
-  }
-  const securitySessions = Array.from(sessionSignalMap.values()).sort(
-    (a, b) => Date.parse(b.lastSeenAt) - Date.parse(a.lastSeenAt)
-  );
-
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-3">
@@ -486,6 +439,27 @@ export default async function UserDetailPage({
             }
           />
 
+          <SupportHandoffsPanel
+            userId={id}
+            handoffs={supportHandoffs.map((handoff) => ({
+              ...handoff,
+              fromLabel: handoff.from_admin_id
+                ? adminLabelById.get(handoff.from_admin_id) ?? handoff.from_admin_id
+                : "Unknown admin",
+              toLabel: handoff.to_admin_id
+                ? adminLabelById.get(handoff.to_admin_id) ?? handoff.to_admin_id
+                : null,
+            }))}
+            adminOptions={(adminDirectory ?? []).map((admin) => ({
+              id: admin.id,
+              label: admin.display_name ?? admin.username,
+            }))}
+            canManageSupport={
+              hasPermission(adminContext, "support.notes.manage") ||
+              hasPermission(adminContext, "finance.notes.manage")
+            }
+          />
+
           <UserTimelinePanel items={timelineItems} />
         </div>
 
@@ -632,7 +606,12 @@ export default async function UserDetailPage({
             canManageFlags={hasPermission(adminContext, "flags.manage")}
           />
 
-          <UserSecurityPanel sessions={securitySessions} />
+          <UserSecurityPanel
+            userId={id}
+            sessions={securityData.sessions}
+            devices={securityData.devices}
+            canManageSessions={hasPermission(adminContext, "users.sessions.manage")}
+          />
 
           <Card>
             <CardHeader className="pb-3">
