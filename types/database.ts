@@ -170,6 +170,7 @@ export type AdminSessionRow = {
   last_seen_at: string;
   expires_at: string;
   idle_expires_at: string;
+  last_sensitive_auth_at: string | null;
   revoked_at: string | null;
   revoked_reason: string | null;
   mfa_verified_at: string | null;

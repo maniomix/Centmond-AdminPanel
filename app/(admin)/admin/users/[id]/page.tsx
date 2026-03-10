@@ -16,7 +16,6 @@ import { UserEditForm } from "./user-edit-form";
 import { formatEuroAmount } from "@/lib/money";
 import { pickLatestIsoTimestamp } from "@/lib/user-activity";
 import {
-  extractUserCategories,
   getSubscriptionBadgeVariant,
   hasElevatedAccess,
   summarizeJson,
@@ -166,7 +165,6 @@ export default async function UserDetailPage({
     recentEvents?.[0]?.created_at ?? null
   );
   const displayName = user.display_name?.trim() || "Unnamed User";
-  const customCategories = extractUserCategories(user.custom_categories);
   const eventsLast7d = activityRows?.length ?? 0;
   const transactionsLast30d = transactionRows30d?.length ?? 0;
   const income30d = (transactionRows30d ?? [])
@@ -380,17 +378,6 @@ export default async function UserDetailPage({
             </p>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-xs uppercase tracking-wide text-neutral-500">Custom categories</p>
-            <p className="mt-2 text-2xl font-semibold text-neutral-900">
-              {customCategories.length}
-            </p>
-            <p className="mt-1 text-xs text-neutral-500">
-              {customCategories[0] ? customCategories.slice(0, 2).join(", ") : "No custom setup"}
-            </p>
-          </CardContent>
-        </Card>
       </div>
 
       <div className="grid gap-5 lg:grid-cols-3">
@@ -399,7 +386,7 @@ export default async function UserDetailPage({
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Edit User</CardTitle>
               <CardDescription>
-                Update profile fields, verification, custom categories and profile assets.
+                Update profile fields, verification state, and profile assets.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -605,20 +592,6 @@ export default async function UserDetailPage({
                   </div>
                 ) : (
                   <p className="mt-0.5 text-sm text-neutral-400">No event signal yet.</p>
-                )}
-              </div>
-              <div>
-                <p className="text-xs text-neutral-500">Custom categories</p>
-                {customCategories.length ? (
-                  <div className="mt-1 flex flex-wrap gap-2">
-                    {customCategories.map((category) => (
-                      <Badge key={category} variant="secondary" className="bg-neutral-100 text-neutral-700">
-                        {category}
-                      </Badge>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="mt-0.5 text-sm text-neutral-400">No custom categories.</p>
                 )}
               </div>
               <div>

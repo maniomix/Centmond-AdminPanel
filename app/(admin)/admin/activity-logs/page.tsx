@@ -4,6 +4,10 @@ import { ActivityLogsClient } from "./activity-logs-client";
 import { parsePage } from "@/lib/table-params";
 import type { Json } from "@/types/database";
 import { requirePermission } from "@/lib/admin/permissions";
+import {
+  buildOnlineUserIds,
+  USER_SESSION_STATE_EVENTS,
+} from "@/lib/user-activity";
 
 export const revalidate = 0;
 
@@ -13,9 +17,6 @@ const ANALYTICS_BATCH_SIZE = 1000;
 const ERROR_EVENT_KEYWORDS = ["error", "fail", "exception", "timeout", "denied"];
 const ONLINE_WINDOW_SECONDS = 12;
 const SESSION_STATE_LOOKBACK_HOURS = 24;
-const ONLINE_SESSION_EVENTS = ["session_start", "app_open", "session_resume"] as const;
-const OFFLINE_SESSION_EVENTS = ["session_end", "app_background", "app_closed"] as const;
-const SESSION_STATE_EVENTS = [...ONLINE_SESSION_EVENTS, ...OFFLINE_SESSION_EVENTS] as const;
 
 type TimeWindow =
   | "1h"
@@ -561,7 +562,7 @@ export default async function ActivityLogsPage({
     chart?: string;
   }>;
 }) {
-  await requirePermission("dashboard.view");
+  await requirePermission("activity_logs.view");
   const params = await searchParams;
   const page = parsePage(params.page);
   const pageSize = EVENT_PAGE_SIZE;
@@ -618,16 +619,16 @@ export default async function ActivityLogsPage({
   if (!noUserMatches && scope !== "anonymous") {
     let sessionStateQuery = supabase
       .from("events")
-      .select("user_id,event_name,created_at")
+      .select("user_id,session_id,event_name,created_at")
       .not("user_id", "is", null)
-      .in("event_name", [...SESSION_STATE_EVENTS])
+      .in("event_name", [...USER_SESSION_STATE_EVENTS])
       .gte("created_at", sessionStateSinceIso)
       .order("created_at", { ascending: false })
       .limit(3000);
 
     let recentEventsQuery = supabase
       .from("events")
-      .select("user_id,event_name")
+      .select("user_id,session_id,event_name,created_at")
       .not("user_id", "is", null)
       .gte("created_at", onlineNowSinceIso)
       .order("created_at", { ascending: false })
@@ -643,43 +644,21 @@ export default async function ActivityLogsPage({
       recentEventsQuery,
     ]);
 
-    const latestSessionEventByUser = new Map<string, string>();
-    for (const row of sessionStateRows ?? []) {
-      if (!row.user_id) continue;
-      if (!latestSessionEventByUser.has(row.user_id)) {
-        latestSessionEventByUser.set(row.user_id, row.event_name);
-      }
-    }
-
-    const offlineBySession = new Set(
-      Array.from(latestSessionEventByUser.entries())
-        .filter(([, eventNameValue]) =>
-          (OFFLINE_SESSION_EVENTS as readonly string[]).includes(eventNameValue)
-        )
-        .map(([userId]) => userId)
-    );
-
-    const onlineBySession = new Set(
-      Array.from(latestSessionEventByUser.entries())
-        .filter(([, eventNameValue]) =>
-          (ONLINE_SESSION_EVENTS as readonly string[]).includes(eventNameValue)
-        )
-        .map(([userId]) => userId)
-    );
-
-    const onlineFallback = new Set(
-      (recentEventRows ?? [])
-        .filter((row) => !(OFFLINE_SESSION_EVENTS as readonly string[]).includes(row.event_name))
-        .map((row) => row.user_id)
-        .filter(Boolean) as string[]
-    );
-
-    onlineNowUserIds = Array.from(
-      new Set([
-        ...Array.from(onlineBySession),
-        ...Array.from(onlineFallback).filter((userId) => !offlineBySession.has(userId)),
-      ])
-    );
+    onlineNowUserIds = buildOnlineUserIds({
+      sessionStateRows: (sessionStateRows ?? []).map((row) => ({
+        user_id: row.user_id,
+        session_id: row.session_id,
+        event_name: row.event_name,
+        created_at: row.created_at,
+      })),
+      recentEventRows: (recentEventRows ?? []).map((row) => ({
+        user_id: row.user_id,
+        session_id: row.session_id,
+        event_name: row.event_name,
+        created_at: row.created_at,
+      })),
+      recentWindowSeconds: ONLINE_WINDOW_SECONDS,
+    });
   }
 
   let eventOptions: string[] = [];

@@ -67,7 +67,7 @@ const navItems: NavItem[] = [
     label: "Product Activity",
     href: "/admin/activity-logs",
     icon: Activity,
-    anyPermissions: ["dashboard.view"],
+    anyPermissions: ["activity_logs.view"],
   },
   {
     label: "Audit Logs",

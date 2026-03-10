@@ -9,6 +9,7 @@ import {
 } from "@/lib/admin-auth";
 import { getAdminEnv } from "@/lib/admin/env";
 import { type AdminRole } from "@/lib/admin/constants";
+import { isIpAllowed } from "@/lib/admin/ip-allowlist";
 import { getRequestMetadata, hashToken, createOpaqueToken } from "@/lib/admin/security";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -21,6 +22,7 @@ interface AdminSessionRowCompat {
   token_hash?: string | null;
   created_at: string;
   last_seen_at?: string | null;
+  last_sensitive_auth_at?: string | null;
   expires_at: string;
   idle_expires_at?: string | null;
   revoked_at?: string | null;
@@ -34,6 +36,7 @@ interface AdminUserCompatRow {
   is_active?: boolean | null;
   last_password_change_at?: string | null;
   must_reauth_after?: string | null;
+  allowed_ip_cidrs?: string[] | null;
 }
 
 export interface AdminIdentity {
@@ -49,7 +52,27 @@ export interface AdminPayload {
   sessionId: string;
   expiresAt: string;
   idleExpiresAt: string;
+  lastSensitiveAuthAt: string | null;
   status: string;
+}
+
+export class RecentAdminAuthRequiredError extends Error {
+  code = "RECENT_AUTH_REQUIRED";
+
+  constructor() {
+    super("Recent password confirmation required");
+    this.name = "RecentAdminAuthRequiredError";
+  }
+}
+
+export function hasRecentSensitiveAuthTimestamp(
+  timestamp: string | null | undefined,
+  windowMinutes: number
+): boolean {
+  if (!timestamp) return false;
+  const parsed = Date.parse(timestamp);
+  if (Number.isNaN(parsed)) return false;
+  return Date.now() - parsed <= windowMinutes * 60 * 1000;
 }
 
 function buildSessionDurations(rememberMe = false) {
@@ -84,6 +107,7 @@ export async function setAdminSessionCookie(
       expires_at: expiresAt.toISOString(),
       idle_expires_at: idleExpiresAt.toISOString(),
       last_seen_at: new Date(now).toISOString(),
+      last_sensitive_auth_at: new Date(now).toISOString(),
       ip_address: request.ipAddress,
       user_agent: request.userAgent,
       device_label: request.deviceLabel,
@@ -100,6 +124,9 @@ export async function setAdminSessionCookie(
         admin_id: admin.id,
         token: secret,
         expires_at: expiresAt.toISOString(),
+        idle_expires_at: idleExpiresAt.toISOString(),
+        last_seen_at: new Date(now).toISOString(),
+        last_sensitive_auth_at: new Date(now).toISOString(),
       } as never)
       .select("id")
       .single();
@@ -175,6 +202,7 @@ export async function getAdminSession(): Promise<AdminPayload | null> {
   }
 
   const supabase = createAdminClient();
+  const request = await getRequestMetadata();
   const { data: session } = await supabase
     .from("admin_sessions")
     .select("*")
@@ -228,6 +256,11 @@ export async function getAdminSession(): Promise<AdminPayload | null> {
     return null;
   }
 
+  if (!isIpAllowed(request.ipAddress, adminRecord.allowed_ip_cidrs)) {
+    await revokeAdminSession(sessionRecord.id, "ip_allowlist_mismatch");
+    return null;
+  }
+
   const lastSeenAt = sessionRecord.last_seen_at
     ? new Date(sessionRecord.last_seen_at).getTime()
     : 0;
@@ -252,6 +285,8 @@ export async function getAdminSession(): Promise<AdminPayload | null> {
     sessionId: sessionRecord.id,
     expiresAt: sessionExpiresAt,
     idleExpiresAt: sessionIdleExpiresAt,
+    lastSensitiveAuthAt:
+      sessionRecord.last_sensitive_auth_at ?? sessionRecord.created_at ?? null,
     status: adminStatus,
   };
 }
@@ -264,17 +299,20 @@ export async function requireAdminSession(): Promise<AdminPayload> {
   return session;
 }
 
-export function canManageData(role: string): boolean {
-  return [
-    "super_admin",
-    "operations_admin",
-    "finance_admin",
-    "support_admin",
-    "moderation_admin",
-    "admin",
-  ].includes(role);
+export async function markCurrentAdminSessionSensitiveAuth(): Promise<void> {
+  const session = await requireAdminSession();
+  const supabase = createAdminClient();
+  await supabase
+    .from("admin_sessions")
+    .update({ last_sensitive_auth_at: new Date().toISOString() })
+    .eq("id", session.sessionId);
 }
 
-export function isSuperAdmin(role: string): boolean {
-  return role === "super_admin";
+export async function requireRecentAdminAuth(): Promise<AdminPayload> {
+  const session = await requireAdminSession();
+  const windowMinutes = getAdminEnv().ADMIN_SENSITIVE_ACTION_WINDOW_MINUTES;
+  if (!hasRecentSensitiveAuthTimestamp(session.lastSensitiveAuthAt, windowMinutes)) {
+    throw new RecentAdminAuthRequiredError();
+  }
+  return session;
 }

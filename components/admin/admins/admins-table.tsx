@@ -114,8 +114,8 @@ export function AdminsTable({
   async function handleCreateAdmin() {
     setCreateLoading(true);
     const result = await createAdminAccountAction(createForm);
-    if (result.error) {
-      toast.error(result.error);
+    if ("error" in result) {
+      toast.error(typeof result.error === "string" ? result.error : "Failed to create admin");
     } else {
       toast.success("Admin account created");
       setCreateOpen(false);
@@ -359,8 +359,8 @@ export function AdminsTable({
             statusTarget.nextStatus,
             reason
           );
-          if (result.error) {
-            toast.error(result.error);
+          if ("error" in result) {
+            toast.error(typeof result.error === "string" ? result.error : "Failed to update status");
           } else {
             toast.success("Admin status updated");
             setStatusTarget(null);
@@ -383,8 +383,10 @@ export function AdminsTable({
         onConfirm={async (reason) => {
           if (!revokeTarget) return;
           const result = await revokeAdminSessionsAction(revokeTarget.adminId, reason);
-          if (result.error) {
-            toast.error(result.error);
+          if ("error" in result) {
+            toast.error(
+              typeof result.error === "string" ? result.error : "Failed to revoke sessions"
+            );
           } else {
             toast.success("Admin sessions revoked");
             setRevokeTarget(null);

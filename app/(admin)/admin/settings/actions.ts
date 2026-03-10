@@ -2,7 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getAdminSession } from "@/lib/admin-session";
+import {
+  getAdminSession,
+  markCurrentAdminSessionSensitiveAuth,
+  requireAdminSession,
+  revokeAdminSession,
+} from "@/lib/admin-session";
 import { auditWithCurrentAdmin } from "@/lib/admin/audit";
 import { requirePermission } from "@/lib/admin/permissions";
 import { assertSameOriginMutation } from "@/lib/admin/security";
@@ -39,86 +44,94 @@ export async function updateProfileAction(
   return {};
 }
 
-export async function updateAdminRoleAction(
-  id: string,
-  role: "super_admin" | "operations_admin" | "support_admin" | "finance_admin" | "moderation_admin" | "analyst"
+export async function confirmSensitiveAccessAction(
+  password: string
 ): Promise<{ error?: string }> {
   await assertSameOriginMutation();
-  await requirePermission("roles.assign");
+  const session = await requireAdminSession();
+  if (!password.trim()) {
+    return { error: "Password is required" };
+  }
 
   const supabase = createAdminClient();
-  const { data: target } = await supabase
-    .from("admin_users")
-    .select("role, username")
-    .eq("id", id)
-    .maybeSingle();
-  const { data: roleRow } = await supabase
-    .from("admin_roles")
-    .select("id")
-    .eq("key", role)
-    .maybeSingle();
-  if (!roleRow) return { error: "Role not configured" };
-
-  await supabase.from("admin_user_roles").delete().eq("admin_id", id);
-  const { error: roleAssignmentError } = await supabase.from("admin_user_roles").insert({
-    admin_id: id,
-    role_id: roleRow.id,
+  const { data, error } = await supabase.rpc("admin_login", {
+    p_username: session.username,
+    p_password: password,
   });
-  if (roleAssignmentError) return { error: roleAssignmentError.message };
+  if (error || !data || typeof data !== "object" || Array.isArray(data)) {
+    await auditWithCurrentAdmin({
+      actionType: "admin.reauth.failed",
+      category: "security",
+      severity: "warning",
+      targetEntityType: "admin_session",
+      targetEntityId: session.sessionId,
+      targetSummary: session.username,
+    });
+    return { error: "Current password is incorrect" };
+  }
+  const result = data as {
+    success?: boolean;
+    admin?: { id?: string; username?: string };
+  };
+  if (!result.success || result.admin?.id !== session.sub) {
+    await auditWithCurrentAdmin({
+      actionType: "admin.reauth.failed",
+      category: "security",
+      severity: "warning",
+      targetEntityType: "admin_session",
+      targetEntityId: session.sessionId,
+      targetSummary: session.username,
+    });
+    return { error: "Current password is incorrect" };
+  }
 
-  const { error } = await supabase
-    .from("admin_users")
-    .update({ role, updated_at: new Date().toISOString() })
-    .eq("id", id);
-
-  if (error) return { error: "Failed to update role" };
-  await auditWithCurrentAdmin({
-    actionType: "admin.role_changed",
-    category: "admin",
-    targetEntityType: "admin_user",
-    targetEntityId: id,
-    targetSummary: target?.username ?? id,
-    beforeState: { role: target?.role },
-    afterState: { role },
-  });
+  await markCurrentAdminSessionSensitiveAuth();
+  await auditWithCurrentAdmin(
+    {
+      actionType: "admin.reauth.confirmed",
+      category: "security",
+      targetEntityType: "admin_session",
+      targetEntityId: session.sessionId,
+      targetSummary: session.username,
+    },
+    { required: true }
+  );
   revalidatePath("/admin/settings");
   return {};
 }
 
-export async function revokeAdminAction(id: string): Promise<{ error?: string }> {
+export async function revokeManagedSessionAction(
+  sessionId: string
+): Promise<{ error?: string }> {
   await assertSameOriginMutation();
   const session = await getAdminSession();
   if (!session) return { error: "Unauthorized" };
-  await requirePermission("admins.deactivate");
-  if (session.sub === id) return { error: "You cannot revoke your own access" };
+  if (sessionId === session.sessionId) {
+    return { error: "Use the account menu to sign out the current session" };
+  }
 
   const supabase = createAdminClient();
-  const { data: before } = await supabase
-    .from("admin_users")
-    .select("username, status")
-    .eq("id", id)
+  const { data: targetSession } = await supabase
+    .from("admin_sessions")
+    .select("id, admin_id, device_label, ip_address")
+    .eq("id", sessionId)
     .maybeSingle();
-  const { error } = await supabase
-    .from("admin_users")
-    .update({
-      status: "deactivated",
-      is_active: false,
-      must_reauth_after: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", id);
+  if (!targetSession || targetSession.admin_id !== session.sub) {
+    return { error: "Session not found" };
+  }
 
-  if (error) return { error: "Failed to revoke access" };
-  await auditWithCurrentAdmin({
-    actionType: "admin.deactivated",
-    category: "admin",
-    severity: "warning",
-    targetEntityType: "admin_user",
-    targetEntityId: id,
-    targetSummary: before?.username ?? id,
-    beforeState: before ?? null,
-    afterState: { status: "deactivated", is_active: false },
-  });
+  await revokeAdminSession(sessionId, "self_service_session_revoke");
+  await auditWithCurrentAdmin(
+    {
+      actionType: "admin.session_revoked.self_service",
+      category: "security",
+      severity: "warning",
+      targetEntityType: "admin_session",
+      targetEntityId: sessionId,
+      targetSummary: targetSession.device_label ?? targetSession.ip_address ?? sessionId,
+    },
+    { required: true }
+  );
   revalidatePath("/admin/settings");
   return {};
 }
@@ -142,13 +155,16 @@ export async function changePasswordAction(
   const changeResult = changeData as { success?: boolean; error?: string };
   if (!changeResult.success) return { error: changeResult.error ?? "Failed to change password" };
 
-  await auditWithCurrentAdmin({
-    actionType: "admin.password_changed",
-    category: "security",
-    targetEntityType: "admin_user",
-    targetEntityId: session.sub,
-    targetSummary: session.username,
-  });
+  await auditWithCurrentAdmin(
+    {
+      actionType: "admin.password_changed",
+      category: "security",
+      targetEntityType: "admin_user",
+      targetEntityId: session.sub,
+      targetSummary: session.username,
+    },
+    { required: true }
+  );
 
   return {};
 }

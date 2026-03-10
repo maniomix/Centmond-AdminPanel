@@ -36,8 +36,28 @@ export interface WriteAdminAuditLogInput {
   approvedAt?: string | null;
 }
 
+export class AdminAuditWriteError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AdminAuditWriteError";
+  }
+}
+
+let hasWarnedAboutMissingAuditTable = false;
+
+function isMissingAuditTableError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("admin_audit_logs") &&
+    (normalized.includes("schema cache") ||
+      normalized.includes("does not exist") ||
+      normalized.includes("relation"))
+  );
+}
+
 export async function writeAdminAuditLog(
-  input: WriteAdminAuditLogInput
+  input: WriteAdminAuditLogInput,
+  options?: { required?: boolean }
 ): Promise<void> {
   const supabase = createAdminClient();
   const request = await getRequestMetadata();
@@ -82,17 +102,32 @@ export async function writeAdminAuditLog(
   const { error } = await supabase.from("admin_audit_logs").insert(payload);
 
   if (error) {
-    console.error("Failed to write admin audit log", error.message);
+    if (options?.required) {
+      throw new AdminAuditWriteError(error.message);
+    }
+
+    if (isMissingAuditTableError(error.message)) {
+      if (!hasWarnedAboutMissingAuditTable && process.env.NODE_ENV !== "production") {
+        hasWarnedAboutMissingAuditTable = true;
+        console.warn(
+          "Skipping optional admin audit log writes because 'admin_audit_logs' is missing."
+        );
+      }
+      return;
+    }
+
+    console.warn("Failed to write optional admin audit log:", error.message);
   }
 }
 
 export async function auditWithCurrentAdmin(
-  input: Omit<WriteAdminAuditLogInput, "actorAdminId" | "actorRole">
+  input: Omit<WriteAdminAuditLogInput, "actorAdminId" | "actorRole">,
+  options?: { required?: boolean }
 ) {
   const session = await getAdminSession();
   await writeAdminAuditLog({
     ...input,
     actorAdminId: session?.sub ?? null,
     actorRole: session?.role ?? null,
-  });
+  }, options);
 }

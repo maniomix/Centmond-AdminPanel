@@ -6,6 +6,7 @@ const envSchema = z.object({
   ADMIN_JWT_SECRET: z.string().min(32),
   ADMIN_SESSION_IDLE_MINUTES: z.coerce.number().int().positive().default(30),
   ADMIN_SESSION_ABSOLUTE_HOURS: z.coerce.number().int().positive().default(12),
+  ADMIN_SENSITIVE_ACTION_WINDOW_MINUTES: z.coerce.number().int().positive().default(15),
   ADMIN_LOGIN_RATE_LIMIT_WINDOW_MINUTES: z.coerce.number().int().positive().default(15),
   ADMIN_LOGIN_RATE_LIMIT_MAX_ATTEMPTS: z.coerce.number().int().positive().default(10),
 });
@@ -20,6 +21,8 @@ export function getAdminEnv() {
       ADMIN_JWT_SECRET: process.env.ADMIN_JWT_SECRET,
       ADMIN_SESSION_IDLE_MINUTES: process.env.ADMIN_SESSION_IDLE_MINUTES,
       ADMIN_SESSION_ABSOLUTE_HOURS: process.env.ADMIN_SESSION_ABSOLUTE_HOURS,
+      ADMIN_SENSITIVE_ACTION_WINDOW_MINUTES:
+        process.env.ADMIN_SENSITIVE_ACTION_WINDOW_MINUTES,
       ADMIN_LOGIN_RATE_LIMIT_WINDOW_MINUTES:
         process.env.ADMIN_LOGIN_RATE_LIMIT_WINDOW_MINUTES,
       ADMIN_LOGIN_RATE_LIMIT_MAX_ATTEMPTS:

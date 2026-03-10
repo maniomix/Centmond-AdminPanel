@@ -3,22 +3,19 @@ import { parsePage, parseSortBy, parseSortOrder } from "@/lib/table-params";
 import { PageHeader } from "@/components/shared/page-header";
 import { UsersTable } from "./users-table";
 import {
+  buildOnlineUserIds,
   buildLatestEventByUserMap,
   pickLatestIsoTimestamp,
+  USER_SESSION_STATE_EVENTS,
 } from "@/lib/user-activity";
 import { hasPermission, requirePermission } from "@/lib/admin/permissions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { extractUserCategories } from "@/lib/user-admin";
 
 export const revalidate = 0;
 const ONLINE_WINDOW_SECONDS = 12;
 const SESSION_STATE_LOOKBACK_HOURS = 24;
 const USER_ACTIVITY_LOOKBACK_HOURS = 24 * 7;
-
-const ONLINE_SESSION_EVENTS = ["session_start", "app_open", "session_resume"] as const;
-const OFFLINE_SESSION_EVENTS = ["session_end", "app_background", "app_closed"] as const;
-const SESSION_STATE_EVENTS = [...ONLINE_SESSION_EVENTS, ...OFFLINE_SESSION_EVENTS] as const;
 
 const USER_SORT_COLUMNS = [
   "display_name",
@@ -62,6 +59,7 @@ export default async function UsersPage({
   const verification = (params.verification ?? "all") as VerificationFilter;
   const sortBy = parseSortBy(params.sortBy, USER_SORT_COLUMNS, "created_at");
   const sortOrder = parseSortOrder(params.sortOrder);
+  const hasActiveFilters = search.length > 0 || verification !== "all";
 
   const supabase = createAdminClient();
   const onlineSinceIso = buildRecentIso(ONLINE_WINDOW_SECONDS);
@@ -71,15 +69,15 @@ export default async function UsersPage({
   const [{ data: sessionStateRows }, { data: recentEventRows }, { data: allTags }] = await Promise.all([
     supabase
       .from("events")
-      .select("user_id,event_name,created_at")
+      .select("user_id,session_id,event_name,created_at")
       .not("user_id", "is", null)
-      .in("event_name", [...SESSION_STATE_EVENTS])
+      .in("event_name", [...USER_SESSION_STATE_EVENTS])
       .gte("created_at", sessionLookbackSinceIso)
       .order("created_at", { ascending: false })
       .limit(3000),
     supabase
       .from("events")
-      .select("user_id,event_name")
+      .select("user_id,session_id,event_name,created_at")
       .not("user_id", "is", null)
       .gte("created_at", onlineSinceIso)
       .order("created_at", { ascending: false })
@@ -89,45 +87,21 @@ export default async function UsersPage({
       : Promise.resolve({ data: [] }),
   ]);
 
-  const latestSessionEventByUser = new Map<
-    string,
-    { event_name: string; created_at: string }
-  >();
-  for (const row of sessionStateRows ?? []) {
-    if (!row.user_id) continue;
-    if (!latestSessionEventByUser.has(row.user_id)) {
-      latestSessionEventByUser.set(row.user_id, {
-        event_name: row.event_name,
-        created_at: row.created_at,
-      });
-    }
-  }
-
-  const offlineBySession = new Set(
-    Array.from(latestSessionEventByUser.entries())
-      .filter(([, row]) => (OFFLINE_SESSION_EVENTS as readonly string[]).includes(row.event_name))
-      .map(([userId]) => userId)
-  );
-
-  const onlineBySession = new Set(
-    Array.from(latestSessionEventByUser.entries())
-      .filter(([, row]) => (ONLINE_SESSION_EVENTS as readonly string[]).includes(row.event_name))
-      .map(([userId]) => userId)
-  );
-
-  const onlineFallback = new Set(
-    (recentEventRows ?? [])
-      .filter((row) => !(OFFLINE_SESSION_EVENTS as readonly string[]).includes(row.event_name))
-      .map((row) => row.user_id)
-      .filter(Boolean) as string[]
-  );
-
-  const onlineUserIds = Array.from(
-    new Set([
-      ...Array.from(onlineBySession),
-      ...Array.from(onlineFallback).filter((userId) => !offlineBySession.has(userId)),
-    ])
-  );
+  const onlineUserIds = buildOnlineUserIds({
+    sessionStateRows: (sessionStateRows ?? []).map((row) => ({
+      user_id: row.user_id,
+      session_id: row.session_id,
+      event_name: row.event_name,
+      created_at: row.created_at,
+    })),
+    recentEventRows: (recentEventRows ?? []).map((row) => ({
+      user_id: row.user_id,
+      session_id: row.session_id,
+      event_name: row.event_name,
+      created_at: row.created_at,
+    })),
+    recentWindowSeconds: ONLINE_WINDOW_SECONDS,
+  });
 
   const { data: onlineUsers } = onlineUserIds.length
     ? await supabase
@@ -258,15 +232,11 @@ export default async function UsersPage({
   const visibleActiveCount = usersWithEffectiveLastSeen.filter(
     (user) => (activityByUserId.get(user.id)?.eventCount ?? 0) > 0
   ).length;
-  const visibleConfiguredCount = usersWithEffectiveLastSeen.filter(
-    (user) => extractUserCategories(user.custom_categories).length > 0
-  ).length;
-
   return (
     <div className="space-y-5">
       <PageHeader
         title="Users"
-        description="Manage users, verification, access levels and custom setup from one place."
+        description="Manage users, verification, access levels, and recent activity from one place."
       />
       <Card>
         <CardContent className="p-4">
@@ -274,8 +244,7 @@ export default async function UsersPage({
             <div>
               <p className="text-sm font-medium text-neutral-900">Active Users Now</p>
               <p className="text-xs text-neutral-500">
-                Online is driven by session events (start/open vs end), with live fallback in last{" "}
-                {ONLINE_WINDOW_SECONDS} seconds.
+                Online only counts users with very recent activity from a session that has not explicitly closed.
               </p>
             </div>
             <Badge variant={onlineUserIds.length > 0 ? "success" : "secondary"}>
@@ -304,10 +273,14 @@ export default async function UsersPage({
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Card>
           <CardContent className="p-4">
-            <p className="text-xs uppercase tracking-wide text-neutral-500">Matching users</p>
+            <p className="text-xs uppercase tracking-wide text-neutral-500">
+              {hasActiveFilters ? "Matching users" : "Total users"}
+            </p>
             <p className="mt-2 text-2xl font-semibold text-neutral-900">{count ?? 0}</p>
             <p className="mt-1 text-xs text-neutral-500">
-              Current result set after search and filters.
+              {hasActiveFilters
+                ? "Current result set after search and filters."
+                : "All users in the current workspace."}
             </p>
           </CardContent>
         </Card>
@@ -331,10 +304,10 @@ export default async function UsersPage({
         </Card>
         <Card>
           <CardContent className="p-4">
-            <p className="text-xs uppercase tracking-wide text-neutral-500">Configured users</p>
-            <p className="mt-2 text-2xl font-semibold text-neutral-900">{visibleConfiguredCount}</p>
+            <p className="text-xs uppercase tracking-wide text-neutral-500">Active in 7d</p>
+            <p className="mt-2 text-2xl font-semibold text-neutral-900">{visibleActiveCount}</p>
             <p className="mt-1 text-xs text-neutral-500">
-              {visibleActiveCount} showed activity in the last 7 days.
+              Users with recorded activity during the last 7 days.
             </p>
           </CardContent>
         </Card>

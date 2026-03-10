@@ -9,7 +9,6 @@ import { LiveRefresh } from "@/components/shared/live-refresh";
 import { Badge } from "@/components/ui/badge";
 import { formatDateShort } from "@/lib/utils";
 import { cn } from "@/lib/utils";
-import { extractUserCategories } from "@/lib/user-admin";
 import type { UserRow } from "@/types";
 import { UserBulkActions } from "@/components/admin/users/user-bulk-actions";
 import { UserRowActions } from "./user-row-actions";
@@ -220,6 +219,7 @@ export function UsersTable({
     {
       key: "subscription",
       label: "Subscription",
+      className: "align-top whitespace-nowrap",
       render: (row: UserRow) => {
         const subscription = subscriptionByUserId[row.id];
         if (!subscription) {
@@ -227,58 +227,26 @@ export function UsersTable({
         }
         const showStatus =
           subscription.status.trim().toLowerCase() !== subscription.plan.trim().toLowerCase();
+        const details = [
+          showStatus ? subscription.status.trim() : null,
+          subscription.current_period_end
+            ? `Until ${formatDateShort(subscription.current_period_end)}`
+            : formatPlatformLabel(subscription.platform),
+        ]
+          .filter((value): value is string => Boolean(value?.trim().length))
+          .join(" • ");
 
         return (
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <Badge
-                variant={planVariant[subscription.plan] ?? "secondary"}
-                className="capitalize text-xs"
-              >
-                {subscription.plan}
-              </Badge>
-              {showStatus ? (
-                <span className="text-xs text-neutral-500 capitalize">{subscription.status}</span>
-              ) : null}
-            </div>
-            <p className="text-xs text-neutral-400">
-              {subscription.current_period_end
-                ? `Until ${formatDateShort(subscription.current_period_end)}`
-                : formatPlatformLabel(subscription.platform)}
-            </p>
-          </div>
-        );
-      },
-    },
-    {
-      key: "custom_categories",
-      label: "Categories",
-      render: (row: UserRow) => {
-        const categories = extractUserCategories(row.custom_categories);
-        if (!categories.length) {
-          return <span className="text-xs text-neutral-400">No custom setup</span>;
-        }
-
-        return (
-          <div className="space-y-1">
-            <p className="text-xs font-medium text-neutral-800">
-              {categories.length} custom {categories.length === 1 ? "category" : "categories"}
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {categories.slice(0, 2).map((category) => (
-                <span
-                  key={category}
-                  className="rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] text-neutral-600"
-                >
-                  {humanizeIdentifier(category)}
-                </span>
-              ))}
-              {categories.length > 2 ? (
-                <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] text-neutral-500">
-                  +{categories.length - 2} more
-                </span>
-              ) : null}
-            </div>
+          <div className="flex items-center gap-2 whitespace-nowrap">
+            <Badge
+              variant={planVariant[subscription.plan] ?? "secondary"}
+              className="w-fit capitalize text-xs"
+            >
+              {subscription.plan}
+            </Badge>
+            <span className="text-xs text-neutral-500">
+              {humanizeIdentifier(details)}
+            </span>
           </div>
         );
       },
@@ -286,6 +254,7 @@ export function UsersTable({
     {
       key: "recent_activity",
       label: "7d Activity",
+      className: "align-top",
       render: (row: UserRow) => {
         const activity = activityByUserId[row.id];
         if (!activity?.eventCount) {

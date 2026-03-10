@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/utils";
 import { LiveRefresh } from "@/components/shared/live-refresh";
+import { requirePermission } from "@/lib/admin/permissions";
 import { formatRawEuro, fromStoredMoney } from "@/lib/money";
 
 export const revalidate = 0;
@@ -152,6 +153,7 @@ const statCards = [
 ] as const;
 
 export default async function DashboardPage() {
+  await requirePermission("dashboard.view");
   const [stats, recentEvents] = await Promise.all([getStats(), getRecentEvents()]);
 
   return (

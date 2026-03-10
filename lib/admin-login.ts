@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAdminEnv } from "@/lib/admin/env";
 import { writeAdminAuditLog } from "@/lib/admin/audit";
+import { isIpAllowed } from "@/lib/admin/ip-allowlist";
 import { getRequestMetadata } from "@/lib/admin/security";
 import type { AdminRole } from "@/lib/admin/constants";
 
@@ -31,6 +32,7 @@ interface AdminLoginLookupRecord {
   role: string;
   is_active?: boolean | null;
   status?: string | null;
+  allowed_ip_cidrs?: string[] | null;
   last_login_ip?: string | null;
   last_login_user_agent?: string | null;
   failed_login_count?: number | null;
@@ -173,6 +175,31 @@ export async function authenticateAdmin(
       metadata: { identifier: normalizedIdentifier, reason: "inactive_or_invalid" },
     });
     return { error: "Invalid admin credentials" };
+  }
+
+  if (!isIpAllowed(request.ipAddress, adminRecord.allowed_ip_cidrs)) {
+    await recordLoginAttempt({
+      identifier: normalizedIdentifier,
+      success: false,
+      adminId: adminRecord.id,
+      failureReason: "ip_not_allowed",
+    });
+    await writeAdminAuditLog({
+      actionType: "admin.login.ip_denied",
+      category: "security",
+      severity: "warning",
+      actorAdminId: adminRecord.id,
+      actorRole: adminRecord.role,
+      targetEntityType: "admin_user",
+      targetEntityId: adminRecord.id,
+      targetSummary: adminRecord.username,
+      metadata: {
+        identifier: normalizedIdentifier,
+        ipAddress: request.ipAddress,
+        allowedIpCidrs: adminRecord.allowed_ip_cidrs ?? [],
+      },
+    });
+    return { error: "This network is not allowed for the selected admin account" };
   }
 
   const { data, error } = await supabase.rpc("admin_login", {

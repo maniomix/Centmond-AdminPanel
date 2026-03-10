@@ -84,8 +84,8 @@ export function AdminDetailActions({
         loadingLabel="Updating..."
         onConfirm={async (reason) => {
           const result = await assignAdminRoleAction(adminId, pendingRole, reason);
-          if (result.error) {
-            toast.error(result.error);
+          if ("error" in result) {
+            toast.error(typeof result.error === "string" ? result.error : "Failed to update role");
           } else {
             toast.success("Role updated");
             setRoleDialogOpen(false);
@@ -104,8 +104,8 @@ export function AdminDetailActions({
         onConfirm={async (reason) => {
           const nextStatus = currentStatus === "active" ? "suspended" : "active";
           const result = await updateAdminStatusAction(adminId, nextStatus, reason);
-          if (result.error) {
-            toast.error(result.error);
+          if ("error" in result) {
+            toast.error(typeof result.error === "string" ? result.error : "Failed to update status");
           } else {
             toast.success("Status updated");
             setStatusDialogOpen(false);
@@ -123,8 +123,10 @@ export function AdminDetailActions({
         loadingLabel="Revoking..."
         onConfirm={async (reason) => {
           const result = await revokeAdminSessionsAction(adminId, reason);
-          if (result.error) {
-            toast.error(result.error);
+          if ("error" in result) {
+            toast.error(
+              typeof result.error === "string" ? result.error : "Failed to revoke sessions"
+            );
           } else {
             toast.success("Sessions revoked");
             setRevokeDialogOpen(false);
