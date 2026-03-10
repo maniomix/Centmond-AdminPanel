@@ -13,6 +13,7 @@ export const ADMIN_PERMISSION_KEYS = [
   "subscriptions.manage",
   "billing.view",
   "billing.refunds.issue",
+  "finance.manage",
   "finance.notes.manage",
   "support.view",
   "support.notes.manage",
@@ -98,6 +99,7 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<AdminRole, AdminPermissionKey[]> = 
     "users.sessions.manage",
     "subscriptions.view",
     "subscriptions.manage",
+    "finance.manage",
     "support.view",
     "support.notes.manage",
     "tags.manage",
@@ -143,6 +145,7 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<AdminRole, AdminPermissionKey[]> = 
     "subscriptions.manage",
     "billing.view",
     "billing.refunds.issue",
+    "finance.manage",
     "finance.notes.manage",
     "orders.view",
     "orders.manage",
@@ -213,6 +216,23 @@ export const DEFAULT_SYSTEM_ROLE_ORDER: AdminRole[] = [
 
 export function getAssignableRoles(): AdminRole[] {
   return [...DEFAULT_SYSTEM_ROLE_ORDER];
+}
+
+export function buildPermissionSetForRoleKeys(
+  roleKeys: string[],
+  fallbackRole?: AdminRole
+): Set<AdminPermissionKey> {
+  const keys = roleKeys.length ? roleKeys : fallbackRole ? [fallbackRole] : [];
+  const permissions = new Set<AdminPermissionKey>();
+
+  for (const key of keys) {
+    const normalizedRole = LEGACY_ROLE_TO_SYSTEM_ROLE[key as AdminRole] ?? (key as AdminRole);
+    for (const permission of SYSTEM_ROLE_PERMISSIONS[normalizedRole] ?? []) {
+      permissions.add(permission);
+    }
+  }
+
+  return permissions;
 }
 
 export function isAdminRole(value: string): value is AdminRole {

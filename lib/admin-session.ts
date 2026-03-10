@@ -10,6 +10,7 @@ import {
 import { getAdminEnv } from "@/lib/admin/env";
 import { type AdminRole } from "@/lib/admin/constants";
 import { isIpAllowed } from "@/lib/admin/ip-allowlist";
+import { hasRecentSensitiveAuthTimestamp } from "@/lib/admin/session-utils";
 import { getRequestMetadata, hashToken, createOpaqueToken } from "@/lib/admin/security";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -63,16 +64,6 @@ export class RecentAdminAuthRequiredError extends Error {
     super("Recent password confirmation required");
     this.name = "RecentAdminAuthRequiredError";
   }
-}
-
-export function hasRecentSensitiveAuthTimestamp(
-  timestamp: string | null | undefined,
-  windowMinutes: number
-): boolean {
-  if (!timestamp) return false;
-  const parsed = Date.parse(timestamp);
-  if (Number.isNaN(parsed)) return false;
-  return Date.now() - parsed <= windowMinutes * 60 * 1000;
 }
 
 function buildSessionDurations(rememberMe = false) {

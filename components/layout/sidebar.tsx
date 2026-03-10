@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import type { AdminPermissionKey } from "@/lib/admin/constants";
 
 interface NavItem {
+  section: "Overview" | "Operations" | "Revenue" | "Security" | "Configuration";
   label: string;
   href: string;
   icon: ComponentType<{ className?: string }>;
@@ -28,60 +29,70 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   {
+    section: "Overview",
     label: "Dashboard",
     href: "/dashboard",
     icon: LayoutDashboard,
     anyPermissions: ["dashboard.view"],
   },
   {
-    label: "Users",
-    href: "/admin/users",
-    icon: Users,
-    anyPermissions: ["users.view"],
-  },
-  {
-    label: "Admins",
-    href: "/admin/admins",
-    icon: Shield,
-    anyPermissions: ["admins.view"],
-  },
-  {
-    label: "Subscriptions",
-    href: "/admin/subscriptions",
-    icon: ShieldCheck,
-    anyPermissions: ["subscriptions.view"],
-  },
-  {
+    section: "Overview",
     label: "Search",
     href: "/admin/search",
     icon: Search,
     anyPermissions: ["users.view"],
   },
   {
+    section: "Operations",
+    label: "Users",
+    href: "/admin/users",
+    icon: Users,
+    anyPermissions: ["users.view"],
+  },
+  {
+    section: "Operations",
     label: "Segments",
     href: "/admin/segments",
     icon: Filter,
     anyPermissions: ["users.view"],
   },
   {
-    label: "Product Activity",
-    href: "/admin/activity-logs",
-    icon: Activity,
-    anyPermissions: ["activity_logs.view"],
-  },
-  {
-    label: "Audit Logs",
-    href: "/admin/audit-logs",
-    icon: FileSearch,
-    anyPermissions: ["audit_logs.view"],
-  },
-  {
+    section: "Operations",
     label: "Review Queue",
     href: "/admin/reviews",
     icon: AlertTriangle,
     anyPermissions: ["reviews.manage"],
   },
   {
+    section: "Revenue",
+    label: "Subscriptions",
+    href: "/admin/subscriptions",
+    icon: ShieldCheck,
+    anyPermissions: ["subscriptions.view"],
+  },
+  {
+    section: "Security",
+    label: "Admins",
+    href: "/admin/admins",
+    icon: Shield,
+    anyPermissions: ["admins.view"],
+  },
+  {
+    section: "Security",
+    label: "Product Activity",
+    href: "/admin/activity-logs",
+    icon: Activity,
+    anyPermissions: ["activity_logs.view"],
+  },
+  {
+    section: "Security",
+    label: "Audit Logs",
+    href: "/admin/audit-logs",
+    icon: FileSearch,
+    anyPermissions: ["audit_logs.view"],
+  },
+  {
+    section: "Configuration",
     label: "Settings",
     href: "/admin/settings",
     icon: Settings,
@@ -101,6 +112,7 @@ export function Sidebar({ roleKeys = [], permissions = [] }: SidebarProps) {
     if (isSuperAdmin) return true;
     return item.anyPermissions.some((permission) => permissions.includes(permission));
   });
+  const sections = Array.from(new Set(visibleItems.map((item) => item.section)));
 
   return (
     <aside className="flex h-screen w-60 flex-col border-r border-neutral-200 bg-white">
@@ -113,30 +125,41 @@ export function Sidebar({ roleKeys = [], permissions = [] }: SidebarProps) {
 
       {/* Nav */}
       <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto p-3">
-        {visibleItems.map((item) => {
-          const Icon = item.icon;
-          const isActive =
-            item.href === "/dashboard"
-              ? pathname === "/dashboard"
-              : pathname.startsWith(item.href);
+        {sections.map((section) => (
+          <div key={section} className="mb-3 last:mb-0">
+            <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-400">
+              {section}
+            </div>
+            <div className="flex flex-col gap-0.5">
+              {visibleItems
+                .filter((item) => item.section === section)
+                .map((item) => {
+                  const Icon = item.icon;
+                  const isActive =
+                    item.href === "/dashboard"
+                      ? pathname === "/dashboard"
+                      : pathname.startsWith(item.href);
 
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "group flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                isActive
-                  ? "bg-neutral-900 text-white"
-                  : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900"
-              )}
-            >
-              <Icon className="h-4 w-4 shrink-0" />
-              <span className="flex-1">{item.label}</span>
-              {isActive && <ChevronRight className="h-3 w-3" />}
-            </Link>
-          );
-        })}
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={cn(
+                        "group flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                        isActive
+                          ? "bg-neutral-900 text-white"
+                          : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900"
+                      )}
+                    >
+                      <Icon className="h-4 w-4 shrink-0" />
+                      <span className="flex-1">{item.label}</span>
+                      {isActive && <ChevronRight className="h-3 w-3" />}
+                    </Link>
+                  );
+                })}
+            </div>
+          </div>
+        ))}
       </nav>
 
       {/* Footer */}

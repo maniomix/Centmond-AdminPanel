@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getRequestMetadata } from "@/lib/admin/security";
 import { getAdminSession } from "@/lib/admin-session";
 import type { Json } from "@/types/database";
+import { classifyAuditWriteFailure } from "./audit-utils";
 
 export type AdminAuditCategory =
   | "auth"
@@ -44,16 +45,6 @@ export class AdminAuditWriteError extends Error {
 }
 
 let hasWarnedAboutMissingAuditTable = false;
-
-function isMissingAuditTableError(message: string): boolean {
-  const normalized = message.toLowerCase();
-  return (
-    normalized.includes("admin_audit_logs") &&
-    (normalized.includes("schema cache") ||
-      normalized.includes("does not exist") ||
-      normalized.includes("relation"))
-  );
-}
 
 export async function writeAdminAuditLog(
   input: WriteAdminAuditLogInput,
@@ -102,11 +93,13 @@ export async function writeAdminAuditLog(
   const { error } = await supabase.from("admin_audit_logs").insert(payload);
 
   if (error) {
-    if (options?.required) {
+    const failureMode = classifyAuditWriteFailure(error.message, options);
+
+    if (failureMode === "throw") {
       throw new AdminAuditWriteError(error.message);
     }
 
-    if (isMissingAuditTableError(error.message)) {
+    if (failureMode === "skip") {
       if (!hasWarnedAboutMissingAuditTable && process.env.NODE_ENV !== "production") {
         hasWarnedAboutMissingAuditTable = true;
         console.warn(

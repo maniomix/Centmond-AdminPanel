@@ -4,6 +4,7 @@ import { writeAdminAuditLog } from "@/lib/admin/audit";
 import { isIpAllowed } from "@/lib/admin/ip-allowlist";
 import { getRequestMetadata } from "@/lib/admin/security";
 import type { AdminRole } from "@/lib/admin/constants";
+import { isRateLimitExceeded, normalizeAdminIdentifier } from "./admin/login-utils";
 
 interface AdminLoginRpcResponse {
   success?: boolean;
@@ -37,10 +38,6 @@ interface AdminLoginLookupRecord {
   last_login_user_agent?: string | null;
   failed_login_count?: number | null;
   last_failed_login_at?: string | null;
-}
-
-function normalizeIdentifier(identifier: string): string {
-  return identifier.trim().toLowerCase();
 }
 
 async function loadAdminRecordForLogin(
@@ -120,9 +117,10 @@ async function checkRateLimit(identifier: string, ipAddress: string | null) {
       : Promise.resolve({ count: 0 }),
   ]);
 
-  return (
-    (identifierFailures ?? 0) >= env.ADMIN_LOGIN_RATE_LIMIT_MAX_ATTEMPTS ||
-    (ipFailures ?? 0) >= env.ADMIN_LOGIN_RATE_LIMIT_MAX_ATTEMPTS
+  return isRateLimitExceeded(
+    identifierFailures ?? 0,
+    ipFailures ?? 0,
+    env.ADMIN_LOGIN_RATE_LIMIT_MAX_ATTEMPTS
   );
 }
 
@@ -134,7 +132,7 @@ export async function authenticateAdmin(
   identifier: string,
   password: string
 ): Promise<AuthenticateAdminResult> {
-  const normalizedIdentifier = normalizeIdentifier(identifier);
+  const normalizedIdentifier = normalizeAdminIdentifier(identifier);
   if (!normalizedIdentifier || !password) {
     return { error: "Username or email and password are required" };
   }

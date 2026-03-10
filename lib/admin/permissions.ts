@@ -4,8 +4,8 @@ import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAdminSession } from "@/lib/admin-session";
 import {
+  buildPermissionSetForRoleKeys,
   LEGACY_ROLE_TO_SYSTEM_ROLE,
-  SYSTEM_ROLE_PERMISSIONS,
   type AdminPermissionKey,
   type AdminRole,
 } from "@/lib/admin/constants";
@@ -23,8 +23,7 @@ export interface AdminContext {
 }
 
 function buildLegacyPermissionSet(role: AdminRole): Set<AdminPermissionKey> {
-  const normalizedRole = LEGACY_ROLE_TO_SYSTEM_ROLE[role] ?? role;
-  return new Set(SYSTEM_ROLE_PERMISSIONS[normalizedRole] ?? []);
+  return buildPermissionSetForRoleKeys([LEGACY_ROLE_TO_SYSTEM_ROLE[role] ?? role], role);
 }
 
 export async function getAdminContext(): Promise<AdminContext | null> {

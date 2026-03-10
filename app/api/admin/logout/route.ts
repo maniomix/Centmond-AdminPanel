@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { clearAdminSessionCookie, getAdminSession, revokeAdminSession } from "@/lib/admin-session";
 import { writeAdminAuditLog } from "@/lib/admin/audit";
+import { assertSameOriginMutation } from "@/lib/admin/security";
 
 export async function POST() {
   try {
+    await assertSameOriginMutation();
     const session = await getAdminSession();
     if (session) {
       await revokeAdminSession(session.sessionId, "logout");

@@ -10,10 +10,8 @@ import { SessionSecurityPanel } from "./session-security-panel";
 import { getAdminEnv } from "@/lib/admin/env";
 import { getRoleLabel } from "@/lib/admin/constants";
 import { getAdminContext, hasPermission } from "@/lib/admin/permissions";
-import {
-  hasRecentSensitiveAuthTimestamp,
-  requireAdminSession,
-} from "@/lib/admin-session";
+import { requireAdminSession } from "@/lib/admin-session";
+import { hasRecentSensitiveAuthTimestamp } from "@/lib/admin/session-utils";
 import { redirect } from "next/navigation";
 
 interface CurrentAdminProfile {

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { auditWithCurrentAdmin } from "@/lib/admin/audit";
+import { runAdminMutation, toAdminActionError } from "@/lib/admin/mutations";
 import { requirePermission } from "@/lib/admin/permissions";
 import { assertSameOriginMutation } from "@/lib/admin/security";
 import type { SubscriptionRow, UserRow } from "@/types";
@@ -60,40 +61,59 @@ export async function deleteUserAction(
   id: string,
   reason?: string
 ): Promise<{ error?: string }> {
-  await assertSameOriginMutation();
-  await requirePermission("users.soft_delete");
+  try {
+    return await runAdminMutation({
+      permission: "users.soft_delete",
+      requireRecentAuth: true,
+      execute: async () => {
+        const supabase = createAdminClient();
+        const deletedAt = new Date().toISOString();
+        const { data: before } = await supabase
+          .from("users")
+          .select("id, email, status, deleted_at")
+          .eq("id", id)
+          .maybeSingle();
+        const { error } = await supabase
+          .from("users")
+          .update({
+            status: "soft_deleted",
+            deleted_at: deletedAt,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", id);
+        if (error) {
+          throw new Error(error.message);
+        }
 
-  const supabase = createAdminClient();
-  const { data: before } = await supabase
-    .from("users")
-    .select("id, email, status, deleted_at")
-    .eq("id", id)
-    .maybeSingle();
-  const { error } = await supabase
-    .from("users")
-    .update({
-      status: "soft_deleted",
-      deleted_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", id);
-  if (error) return { error: error.message };
-  await auditWithCurrentAdmin({
-    actionType: "user.soft_deleted",
-    category: "user",
-    severity: "warning",
-    targetEntityType: "user",
-    targetEntityId: id,
-    targetSummary: before?.email ?? id,
-    reason: reason?.trim() || null,
-    beforeState: before ?? null,
-    afterState: {
-      status: "soft_deleted",
-      deleted_at: new Date().toISOString(),
-    },
-  });
-  revalidateUserAdminPaths(id);
-  return {};
+        return {
+          value: {},
+          audit: {
+            actionType: "user.soft_deleted",
+            category: "user",
+            severity: "warning",
+            targetEntityType: "user",
+            targetEntityId: id,
+            targetSummary: before?.email ?? id,
+            reason: reason?.trim() || null,
+            beforeState: before ?? null,
+            afterState: {
+              status: "soft_deleted",
+              deleted_at: deletedAt,
+            },
+          },
+          revalidatePaths: [
+            "/admin/users",
+            `/admin/users/${id}`,
+            "/admin/subscriptions",
+            "/admin/reviews",
+            "/admin/segments",
+          ],
+        };
+      },
+    });
+  } catch (error) {
+    return toAdminActionError(error, "Failed to archive user");
+  }
 }
 
 export async function updateUserAction(
@@ -326,41 +346,65 @@ export async function updateUserStatusAction(
   nextStatus: UserRow["status"],
   reason: string
 ): Promise<{ error?: string }> {
-  await assertSameOriginMutation();
   if (!reason.trim()) return { error: "Reason is required" };
-  await requirePermission(resolveStatusPermission(nextStatus));
+  try {
+    return await runAdminMutation({
+      permission: resolveStatusPermission(nextStatus),
+      requireRecentAuth: ["active", "suspended", "banned", "soft_deleted"].includes(nextStatus),
+      execute: async () => {
+        const supabase = createAdminClient();
+        const { data: before } = await supabase
+          .from("users")
+          .select("id, email, status, deleted_at")
+          .eq("id", userId)
+          .maybeSingle();
+        if (!before) {
+          throw new Error("User not found");
+        }
 
-  const supabase = createAdminClient();
-  const { data: before } = await supabase
-    .from("users")
-    .select("id, email, status, deleted_at")
-    .eq("id", userId)
-    .maybeSingle();
-  if (!before) return { error: "User not found" };
+        const payload = {
+          status: nextStatus,
+          deleted_at: nextStatus === "soft_deleted" ? new Date().toISOString() : null,
+          updated_at: new Date().toISOString(),
+        };
 
-  const payload = {
-    status: nextStatus,
-    deleted_at: nextStatus === "soft_deleted" ? new Date().toISOString() : null,
-    updated_at: new Date().toISOString(),
-  };
+        const { error } = await supabase.from("users").update(payload).eq("id", userId);
+        if (error) {
+          throw new Error(error.message);
+        }
 
-  const { error } = await supabase.from("users").update(payload).eq("id", userId);
-  if (error) return { error: error.message };
-
-  await auditWithCurrentAdmin({
-    actionType: `user.status_changed.${nextStatus}`,
-    category: nextStatus === "under_review" || nextStatus === "flagged" ? "risk" : "user",
-    severity: nextStatus === "banned" ? "critical" : nextStatus === "suspended" ? "warning" : "info",
-    targetEntityType: "user",
-    targetEntityId: userId,
-    targetSummary: before.email,
-    reason,
-    beforeState: before,
-    afterState: payload,
-  });
-
-  revalidateUserAdminPaths(userId);
-  return {};
+        return {
+          value: {},
+          audit: {
+            actionType: `user.status_changed.${nextStatus}`,
+            category:
+              nextStatus === "under_review" || nextStatus === "flagged" ? "risk" : "user",
+            severity:
+              nextStatus === "banned"
+                ? "critical"
+                : nextStatus === "suspended"
+                  ? "warning"
+                  : "info",
+            targetEntityType: "user",
+            targetEntityId: userId,
+            targetSummary: before.email,
+            reason,
+            beforeState: before,
+            afterState: payload,
+          },
+          revalidatePaths: [
+            "/admin/users",
+            `/admin/users/${userId}`,
+            "/admin/subscriptions",
+            "/admin/reviews",
+            "/admin/segments",
+          ],
+        };
+      },
+    });
+  } catch (error) {
+    return toAdminActionError(error, "Failed to update user status");
+  }
 }
 
 type BulkUserActionInput =

@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateAdmin } from "@/lib/admin-login";
+import { assertSameOriginMutation } from "@/lib/admin/security";
 import { setAdminSessionCookie } from "@/lib/admin-session";
 
 export async function POST(request: NextRequest) {
   try {
+    await assertSameOriginMutation();
     const { identifier, password, rememberMe } = await request.json();
 
     if (typeof identifier !== "string" || typeof password !== "string") {
