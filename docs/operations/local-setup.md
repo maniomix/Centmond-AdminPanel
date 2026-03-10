@@ -1,5 +1,7 @@
 # Local Setup
 
+This document is kept for backward compatibility. Use [local-development.md](/Users/mani/Desktop/Centmond-AdminPanel/docs/operations/local-development.md) as the primary local setup guide.
+
 ## Requirements
 
 - Node.js 25.x currently works in this workspace

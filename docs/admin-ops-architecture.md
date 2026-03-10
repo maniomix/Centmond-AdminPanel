@@ -1,5 +1,12 @@
 # Admin Ops Platform Architecture
 
+This legacy top-level document is kept as an index. Prefer the structured docs under:
+
+- [docs/architecture/admin-ops-architecture.md](/Users/mani/Desktop/Centmond-AdminPanel/docs/architecture/admin-ops-architecture.md)
+- [docs/architecture/rbac-permission-model.md](/Users/mani/Desktop/Centmond-AdminPanel/docs/architecture/rbac-permission-model.md)
+- [docs/architecture/data-model-overview.md](/Users/mani/Desktop/Centmond-AdminPanel/docs/architecture/data-model-overview.md)
+- [docs/roadmap/implementation-phases.md](/Users/mani/Desktop/Centmond-AdminPanel/docs/roadmap/implementation-phases.md)
+
 This document now acts as the high-level planning companion to the live implementation.
 
 Use the newer docs for day-to-day maintainer guidance:
