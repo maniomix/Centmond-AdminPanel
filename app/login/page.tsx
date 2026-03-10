@@ -1,7 +1,14 @@
 import { Suspense } from "react";
+import { redirect } from "next/navigation";
+import { getAdminContext } from "@/lib/admin/permissions";
 import { LoginForm } from "./login-form";
 
-export default function LoginPage() {
+export default async function LoginPage() {
+  const admin = await getAdminContext();
+  if (admin) {
+    redirect("/dashboard");
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-neutral-50">
       <div className="w-full max-w-sm">

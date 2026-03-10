@@ -1,23 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  ADMIN_SESSION_COOKIE,
-  SESSION_MAX_AGE,
-  createAdminSession,
-} from "@/lib/admin-auth";
 import { authenticateAdmin } from "@/lib/admin-login";
+import { setAdminSessionCookie } from "@/lib/admin-session";
 
 export async function POST(request: NextRequest) {
   try {
-    const { username, password } = await request.json();
+    const { identifier, password, rememberMe } = await request.json();
 
-    if (typeof username !== "string" || typeof password !== "string") {
+    if (typeof identifier !== "string" || typeof password !== "string") {
       return NextResponse.json(
-        { success: false, error: "Username and password are required" },
+        { success: false, error: "Username or email and password are required" },
         { status: 400 }
       );
     }
 
-    const { admin, error } = await authenticateAdmin(username, password);
+    const { admin, error } = await authenticateAdmin(identifier, password);
     if (!admin || error) {
       return NextResponse.json(
         { success: false, error: error ?? "Invalid credentials" },
@@ -25,19 +21,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const token = await createAdminSession(admin);
-    const response = NextResponse.json({
-      success: true,
-      admin,
-    });
-
-    response.cookies.set(ADMIN_SESSION_COOKIE, token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: SESSION_MAX_AGE,
-      path: "/",
-    });
+    await setAdminSessionCookie(admin, { rememberMe: Boolean(rememberMe) });
+    const response = NextResponse.json({ success: true, admin });
 
     return response;
   } catch (err) {

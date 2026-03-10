@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import Link from "next/link";
 import { Users, ShieldCheck, BadgeDollarSign, Activity, Wallet } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -7,6 +8,7 @@ import { LiveRefresh } from "@/components/shared/live-refresh";
 import { formatRawEuro, fromStoredMoney } from "@/lib/money";
 
 export const revalidate = 0;
+const PREMIUM_STATUSES = ["active", "trialing", "past_due"] as const;
 
 async function getStats() {
   const supabase = createAdminClient();
@@ -26,7 +28,6 @@ async function getStats() {
       .from("users")
       .select("*", { count: "exact", head: true })
       .eq("is_email_verified", true),
-    supabase.from("subscriptions").select("*", { count: "exact", head: true }),
     supabase
       .from("subscriptions")
       .select("*", { count: "exact", head: true })
@@ -34,7 +35,13 @@ async function getStats() {
     supabase
       .from("subscriptions")
       .select("*", { count: "exact", head: true })
-      .eq("plan", "monthly"),
+      .neq("plan", "free")
+      .in("status", [...PREMIUM_STATUSES]),
+    supabase
+      .from("subscriptions")
+      .select("*", { count: "exact", head: true })
+      .eq("plan", "monthly")
+      .in("status", [...PREMIUM_STATUSES]),
     supabase
       .from("events")
       .select("*", { count: "exact", head: true })
@@ -100,6 +107,7 @@ const statCards = [
     icon: Users,
     color: "text-blue-600",
     bg: "bg-blue-50",
+    href: "/admin/users",
   },
   {
     key: "verifiedUsers",
@@ -107,27 +115,31 @@ const statCards = [
     icon: ShieldCheck,
     color: "text-green-600",
     bg: "bg-green-50",
+    href: "/admin/users",
   },
   {
     key: "totalSubscriptions",
-    label: "Total Subscriptions",
+    label: "Purchased (All Time)",
     icon: BadgeDollarSign,
     color: "text-amber-600",
     bg: "bg-amber-50",
+    href: "/admin/subscriptions?tier=purchased",
   },
   {
     key: "paidSubscriptions",
-    label: "Paid Subscriptions",
+    label: "Premium Subscriptions",
     icon: BadgeDollarSign,
     color: "text-purple-600",
     bg: "bg-purple-50",
+    href: "/admin/subscriptions?tier=paid",
   },
   {
     key: "monthlyPlans",
-    label: "Monthly Plans",
+    label: "Monthly Premium",
     icon: Wallet,
     color: "text-neutral-700",
     bg: "bg-neutral-100",
+    href: "/admin/subscriptions?tier=paid&plan=monthly",
   },
   {
     key: "events24h",
@@ -135,6 +147,7 @@ const statCards = [
     icon: Activity,
     color: "text-cyan-700",
     bg: "bg-cyan-50",
+    href: "/admin/activity-logs",
   },
 ] as const;
 
@@ -150,7 +163,7 @@ export default async function DashboardPage() {
           { table: "transactions" },
           { table: "events" },
         ]}
-        intervalFallbackMs={30000}
+        intervalFallbackMs={3000}
       />
 
       <div>
@@ -161,24 +174,30 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-3 gap-4">
-        {statCards.map(({ key, label, icon: Icon, color, bg }) => (
-          <Card key={key}>
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-medium text-neutral-500 uppercase tracking-wider">
-                    {label}
-                  </p>
-                  <p className="mt-1.5 text-2xl font-semibold text-neutral-900">
-                    {stats[key]}
-                  </p>
+        {statCards.map(({ key, label, icon: Icon, color, bg, href }) => (
+          <Link
+            key={key}
+            href={href}
+            className="block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400"
+          >
+            <Card className="transition-colors hover:border-neutral-300 hover:bg-neutral-50/40">
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-neutral-500 uppercase tracking-wider">
+                      {label}
+                    </p>
+                    <p className="mt-1.5 text-2xl font-semibold text-neutral-900">
+                      {stats[key]}
+                    </p>
+                  </div>
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${bg}`}>
+                    <Icon className={`h-5 w-5 ${color}`} />
+                  </div>
                 </div>
-                <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${bg}`}>
-                  <Icon className={`h-5 w-5 ${color}`} />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </Link>
         ))}
       </div>
 

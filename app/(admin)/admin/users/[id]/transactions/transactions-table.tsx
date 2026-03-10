@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { MoreHorizontal, Pencil, Plus, Search, X } from "lucide-react";
 import { DataTable } from "@/components/shared/data-table";
@@ -94,6 +94,7 @@ export function TransactionsTable({
   const [addOpen, setAddOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [searchInput, setSearchInput] = useState(search);
 
   const totalPages = Math.ceil(count / pageSize);
   const liveTables = useMemo(
@@ -104,7 +105,7 @@ export function TransactionsTable({
   function buildUrl(overrides: Record<string, string>) {
     const params = new URLSearchParams({
       page: String(page),
-      search,
+      search: searchInput,
       type,
       category,
       sortBy,
@@ -113,6 +114,26 @@ export function TransactionsTable({
     });
     return `${pathname}?${params.toString()}`;
   }
+
+  useEffect(() => {
+    setSearchInput(search);
+  }, [search]);
+
+  useEffect(() => {
+    if (searchInput === search) return;
+    const timer = setTimeout(() => {
+      const params = new URLSearchParams({
+        page: "1",
+        search: searchInput,
+        type,
+        category,
+        sortBy,
+        sortOrder,
+      });
+      router.replace(`${pathname}?${params.toString()}`);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [category, pathname, router, search, searchInput, sortBy, sortOrder, type]);
 
   function handleSort(key: string) {
     const newOrder = sortBy === key && sortOrder === "asc" ? "desc" : "asc";
@@ -285,7 +306,7 @@ export function TransactionsTable({
 
   return (
     <>
-      <LiveRefresh tables={liveTables} intervalFallbackMs={30000} />
+      <LiveRefresh tables={liveTables} intervalFallbackMs={3000} />
       <div className="space-y-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex flex-1 items-center gap-2">
@@ -293,15 +314,16 @@ export function TransactionsTable({
               <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
               <Input
                 placeholder="Search by category or note..."
-                value={search}
-                onChange={(e) =>
-                  router.push(buildUrl({ search: e.target.value, page: "1" }))
-                }
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
                 className="pl-8 pr-8"
               />
-              {search && (
+              {searchInput && (
                 <button
-                  onClick={() => router.push(buildUrl({ search: "", page: "1" }))}
+                  onClick={() => {
+                    setSearchInput("");
+                    router.replace(buildUrl({ search: "", page: "1" }));
+                  }}
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
                 >
                   <X className="h-3.5 w-3.5" />

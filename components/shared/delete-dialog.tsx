@@ -20,6 +20,9 @@ interface DeleteDialogProps {
   title?: string;
   description?: string;
   trigger?: React.ReactNode;
+  confirmLabel?: string;
+  loadingLabel?: string;
+  confirmClassName?: string;
 }
 
 export function DeleteDialog({
@@ -27,6 +30,9 @@ export function DeleteDialog({
   title = "Delete record",
   description = "This action cannot be undone. The record will be permanently removed.",
   trigger,
+  confirmLabel = "Delete",
+  loadingLabel = "Deleting...",
+  confirmClassName = "bg-red-600 hover:bg-red-700",
 }: DeleteDialogProps) {
   const [loading, setLoading] = useState(false);
 
@@ -55,9 +61,9 @@ export function DeleteDialog({
           <AlertDialogAction
             onClick={handleConfirm}
             disabled={loading}
-            className="bg-red-600 hover:bg-red-700"
+            className={confirmClassName}
           >
-            {loading ? "Deleting..." : "Delete"}
+            {loading ? loadingLabel : confirmLabel}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

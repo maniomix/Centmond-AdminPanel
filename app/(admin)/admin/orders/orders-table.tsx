@@ -6,6 +6,7 @@ import { Eye, MoreHorizontal } from "lucide-react";
 import { DataTable } from "@/components/shared/data-table";
 import { Pagination } from "@/components/shared/pagination";
 import { SearchFilter } from "@/components/shared/search-filter";
+import { LiveRefresh } from "@/components/shared/live-refresh";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -127,6 +128,7 @@ export function OrdersTable({ orders, count, page, pageSize, search, status, sor
 
   return (
     <div className="space-y-4">
+      <LiveRefresh tables={[{ table: "orders" }]} intervalFallbackMs={3000} />
       <SearchFilter
         search={search}
         onSearchChange={(v) => router.push(buildUrl({ search: v, page: "1" }))}

@@ -10,6 +10,7 @@ import { TransactionsTable } from "./transactions-table";
 import type { SubscriptionRow, TransactionRow } from "@/types";
 import { parsePage, parseSortBy, parseSortOrder } from "@/lib/table-params";
 import { formatRawEuro, fromStoredMoney } from "@/lib/money";
+import { requireAnyPermission } from "@/lib/admin/permissions";
 
 const TRANSACTION_SORT_COLUMNS = [
   "date",
@@ -39,6 +40,7 @@ export default async function UserTransactionsPage({
     sortOrder?: string;
   }>;
 }) {
+  await requireAnyPermission(["billing.view", "subscriptions.view"]);
   const { id } = await params;
   const sp = await searchParams;
   const page = parsePage(sp.page);

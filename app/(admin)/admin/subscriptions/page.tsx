@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { parsePage, parseSortBy, parseSortOrder } from "@/lib/table-params";
 import { PageHeader } from "@/components/shared/page-header";
 import { SubscriptionsTable } from "./subscriptions-table";
+import { requirePermission } from "@/lib/admin/permissions";
 
 export const revalidate = 0;
 
@@ -13,6 +14,7 @@ const SUBSCRIPTION_SORT_COLUMNS = [
   "platform",
   "current_period_end",
 ] as const;
+const PREMIUM_STATUSES = ["active", "trialing", "past_due"] as const;
 
 export default async function SubscriptionsPage({
   searchParams,
@@ -21,17 +23,23 @@ export default async function SubscriptionsPage({
     page?: string;
     search?: string;
     userId?: string;
+    tier?: string;
     status?: string;
     plan?: string;
     sortBy?: string;
     sortOrder?: string;
   }>;
 }) {
+  await requirePermission("subscriptions.view");
   const params = await searchParams;
   const page = parsePage(params.page);
   const pageSize = 20;
   const search = params.search?.trim() ?? "";
   const userId = params.userId?.trim() ?? "";
+  const tier =
+    params.tier === "paid" || params.tier === "free" || params.tier === "purchased"
+      ? params.tier
+      : "all";
   const status = params.status ?? "all";
   const plan = params.plan ?? "all";
   const sortBy = parseSortBy(params.sortBy, SUBSCRIPTION_SORT_COLUMNS, "updated_at");
@@ -91,6 +99,7 @@ export default async function SubscriptionsPage({
           pageSize={pageSize}
           search={search}
           userId={userId}
+          tier={tier}
           status={status}
           plan={plan}
           sortBy={sortBy}
@@ -106,6 +115,13 @@ export default async function SubscriptionsPage({
 
   if (userFilterIds) {
     query = query.in("user_id", userFilterIds);
+  }
+  if (tier === "paid") {
+    query = query.neq("plan", "free").in("status", [...PREMIUM_STATUSES]);
+  } else if (tier === "purchased") {
+    query = query.neq("status", "free");
+  } else if (tier === "free") {
+    query = query.or("plan.eq.free,status.eq.free");
   }
   if (status !== "all") {
     query = query.eq("status", status);
@@ -146,6 +162,7 @@ export default async function SubscriptionsPage({
         pageSize={pageSize}
         search={search}
         userId={userId}
+        tier={tier}
         status={status}
         plan={plan}
         sortBy={sortBy}

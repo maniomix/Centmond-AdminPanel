@@ -6,13 +6,20 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { getAssignableRoles } from "@/lib/admin/constants";
 import { updateAdminRoleAction, revokeAdminAction } from "./actions";
 
 interface AdminUser {
   id: string;
   username: string;
   display_name: string | null;
-  role: "super_admin" | "admin" | "viewer";
+  role:
+    | "super_admin"
+    | "operations_admin"
+    | "support_admin"
+    | "finance_admin"
+    | "moderation_admin"
+    | "analyst";
 }
 
 interface AdminAccessFormProps {
@@ -20,17 +27,20 @@ interface AdminAccessFormProps {
   currentAdminId: string;
 }
 
-const roleBadge: Record<string, "default" | "secondary" | "outline"> = {
+const roleBadge: Record<string, "default" | "secondary" | "outline" | "warning" | "info"> = {
   super_admin: "default",
-  admin: "secondary",
-  viewer: "outline",
+  operations_admin: "info",
+  support_admin: "secondary",
+  finance_admin: "warning",
+  moderation_admin: "secondary",
+  analyst: "outline",
 };
 
 export function AdminAccessForm({ admins, currentAdminId }: AdminAccessFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState<string | null>(null);
 
-  async function handleRoleChange(id: string, role: "super_admin" | "admin" | "viewer") {
+  async function handleRoleChange(id: string, role: AdminUser["role"]) {
     setLoading(id);
     const result = await updateAdminRoleAction(id, role);
     if (result.error) {
@@ -77,16 +87,18 @@ export function AdminAccessForm({ admins, currentAdminId }: AdminAccessFormProps
                 <>
                   <Select
                     value={admin.role}
-                    onValueChange={(v) => handleRoleChange(admin.id, v as "super_admin" | "admin" | "viewer")}
+                    onValueChange={(v) => handleRoleChange(admin.id, v as AdminUser["role"])}
                     disabled={loading === admin.id}
                   >
                     <SelectTrigger className="h-8 w-28 text-xs">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="super_admin">Super Admin</SelectItem>
-                      <SelectItem value="admin">Admin</SelectItem>
-                      <SelectItem value="viewer">Viewer</SelectItem>
+                      {getAssignableRoles().map((role) => (
+                        <SelectItem key={role} value={role}>
+                          {role.replace(/_/g, " ")}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                   <Button

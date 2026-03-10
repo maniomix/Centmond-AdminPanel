@@ -11,11 +11,37 @@ export type UserRow = {
   id: string;
   email: string;
   display_name: string | null;
+  status:
+    | "active"
+    | "suspended"
+    | "banned"
+    | "flagged"
+    | "under_review"
+    | "pending_verification"
+    | "soft_deleted"
+    | "inactive";
+  phone: string | null;
+  phone_verified: boolean;
+  username: string | null;
+  full_name: string | null;
+  auth_provider: string | null;
   profile_image_url: string | null;
   profile_image: string | null;
   is_email_verified: boolean;
   custom_categories: Json | string | null;
   last_active_at: string | null;
+  last_login_at: string | null;
+  country_code: string | null;
+  region: string | null;
+  locale: string | null;
+  billing_status: string | null;
+  risk_score: number;
+  risk_status: string | null;
+  referral_code: string | null;
+  referred_by_code: string | null;
+  onboarding_status: string | null;
+  vip_status: boolean;
+  deleted_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -105,11 +131,29 @@ export type ActivityLogRow = {
 export type AdminUserRow = {
   id: string;
   username: string;
+  email: string | null;
   password_hash: string;
   display_name: string | null;
-  role: "super_admin" | "admin" | "viewer";
+  role:
+    | "super_admin"
+    | "operations_admin"
+    | "support_admin"
+    | "finance_admin"
+    | "moderation_admin"
+    | "analyst"
+    | "admin"
+    | "viewer";
+  status: "active" | "suspended" | "deactivated";
   is_active: boolean;
+  mfa_enabled: boolean;
   last_login_at: string | null;
+  last_login_ip: string | null;
+  last_login_user_agent: string | null;
+  last_password_change_at: string | null;
+  must_reauth_after: string | null;
+  failed_login_count: number;
+  last_failed_login_at: string | null;
+  allowed_ip_cidrs: string[] | null;
   created_at: string;
   updated_at: string;
 };
@@ -117,9 +161,162 @@ export type AdminUserRow = {
 export type AdminSessionRow = {
   id: string;
   admin_id: string;
-  token: string;
+  token: string | null;
+  token_hash: string | null;
+  session_label: string | null;
+  device_label: string | null;
+  ip_address: string | null;
+  user_agent: string | null;
+  last_seen_at: string;
   expires_at: string;
+  idle_expires_at: string;
+  revoked_at: string | null;
+  revoked_reason: string | null;
+  mfa_verified_at: string | null;
   created_at: string;
+};
+
+export type AdminRoleRow = {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  status: "active" | "inactive";
+  is_system: boolean;
+  parent_role_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AdminPermissionRow = {
+  key: string;
+  label: string;
+  description: string | null;
+  created_at: string;
+};
+
+export type AdminRolePermissionRow = {
+  role_id: string;
+  permission_key: string;
+  created_at: string;
+};
+
+export type AdminUserRoleRow = {
+  admin_id: string;
+  role_id: string;
+  assigned_by_admin_id: string | null;
+  created_at: string;
+};
+
+export type AdminLoginAttemptRow = {
+  id: string;
+  admin_id: string | null;
+  identifier: string;
+  success: boolean;
+  failure_reason: string | null;
+  ip_address: string | null;
+  user_agent: string | null;
+  created_at: string;
+};
+
+export type AdminAuditLogRow = {
+  id: string;
+  actor_admin_id: string | null;
+  actor_role: string | null;
+  action_type: string;
+  category:
+    | "auth"
+    | "admin"
+    | "user"
+    | "subscription"
+    | "billing"
+    | "support"
+    | "risk"
+    | "search"
+    | "export"
+    | "config"
+    | "security"
+    | "bulk";
+  severity: "info" | "warning" | "critical";
+  target_entity_type: string | null;
+  target_entity_id: string | null;
+  target_summary: string | null;
+  reason: string | null;
+  before_state: Json | null;
+  after_state: Json | null;
+  metadata: Json | null;
+  request_id: string | null;
+  ip_address: string | null;
+  user_agent: string | null;
+  approved_by_admin_id: string | null;
+  approved_at: string | null;
+  created_at: string;
+};
+
+export type UserNoteRow = {
+  id: string;
+  user_id: string;
+  author_admin_id: string | null;
+  note_type: "general" | "support" | "finance" | "risk" | "moderation";
+  body: string;
+  is_pinned: boolean;
+  is_internal_only: boolean;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+};
+
+export type UserTagRow = {
+  id: string;
+  key: string;
+  label: string;
+  color: string | null;
+  description: string | null;
+  is_system: boolean;
+  created_at: string;
+};
+
+export type UserTagAssignmentRow = {
+  user_id: string;
+  tag_id: string;
+  assigned_by_admin_id: string | null;
+  created_at: string;
+};
+
+export type UserFlagRow = {
+  id: string;
+  key: string;
+  label: string;
+  description: string | null;
+  severity: "info" | "warning" | "critical";
+  is_system: boolean;
+  created_at: string;
+};
+
+export type UserFlagAssignmentRow = {
+  id: string;
+  user_id: string;
+  flag_id: string;
+  status: "active" | "resolved" | "dismissed";
+  reason: string | null;
+  assigned_by_admin_id: string | null;
+  resolved_by_admin_id: string | null;
+  resolved_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SavedViewRow = {
+  id: string;
+  owner_admin_id: string | null;
+  scope: "users" | "admins" | "subscriptions" | "audit_logs";
+  name: string;
+  description: string | null;
+  filters: Json;
+  columns: Json | null;
+  is_shared: boolean;
+  created_at: string;
+  updated_at: string;
 };
 
 export type Database = {
@@ -151,14 +348,159 @@ export type Database = {
       };
       admin_users: {
         Row: AdminUserRow;
-        Insert: Omit<AdminUserRow, "id" | "created_at" | "updated_at">;
+        Insert: {
+          username: string;
+          email?: string | null;
+          password_hash: string;
+          display_name?: string | null;
+          role?: AdminUserRow["role"];
+          status?: AdminUserRow["status"];
+          is_active?: boolean;
+          mfa_enabled?: boolean;
+          last_login_at?: string | null;
+          last_login_ip?: string | null;
+          last_login_user_agent?: string | null;
+          last_password_change_at?: string | null;
+          must_reauth_after?: string | null;
+          failed_login_count?: number;
+          last_failed_login_at?: string | null;
+          allowed_ip_cidrs?: string[] | null;
+        };
         Update: Partial<Omit<AdminUserRow, "id" | "created_at">>;
+        Relationships: [];
+      };
+      admin_roles: {
+        Row: AdminRoleRow;
+        Insert: Omit<AdminRoleRow, "id" | "created_at" | "updated_at">;
+        Update: Partial<Omit<AdminRoleRow, "id" | "created_at">>;
+        Relationships: [];
+      };
+      admin_permissions: {
+        Row: AdminPermissionRow;
+        Insert: Omit<AdminPermissionRow, "created_at">;
+        Update: Partial<Omit<AdminPermissionRow, "created_at">>;
+        Relationships: [];
+      };
+      admin_role_permissions: {
+        Row: AdminRolePermissionRow;
+        Insert: Omit<AdminRolePermissionRow, "created_at">;
+        Update: Partial<AdminRolePermissionRow>;
+        Relationships: [];
+      };
+      admin_user_roles: {
+        Row: AdminUserRoleRow;
+        Insert: {
+          admin_id: string;
+          role_id: string;
+          assigned_by_admin_id?: string | null;
+        };
+        Update: Partial<AdminUserRoleRow>;
         Relationships: [];
       };
       admin_sessions: {
         Row: AdminSessionRow;
-        Insert: Omit<AdminSessionRow, "id" | "created_at">;
+        Insert: {
+          admin_id: string;
+          token?: string | null;
+          token_hash?: string | null;
+          session_label?: string | null;
+          device_label?: string | null;
+          ip_address?: string | null;
+          user_agent?: string | null;
+          last_seen_at?: string;
+          expires_at: string;
+          idle_expires_at: string;
+          revoked_at?: string | null;
+          revoked_reason?: string | null;
+          mfa_verified_at?: string | null;
+        };
         Update: Partial<AdminSessionRow>;
+        Relationships: [];
+      };
+      admin_login_attempts: {
+        Row: AdminLoginAttemptRow;
+        Insert: Omit<AdminLoginAttemptRow, "id" | "created_at">;
+        Update: Partial<AdminLoginAttemptRow>;
+        Relationships: [];
+      };
+      admin_audit_logs: {
+        Row: AdminAuditLogRow;
+        Insert: {
+          actor_admin_id?: string | null;
+          actor_role?: string | null;
+          action_type: string;
+          category: AdminAuditLogRow["category"];
+          severity?: AdminAuditLogRow["severity"];
+          target_entity_type?: string | null;
+          target_entity_id?: string | null;
+          target_summary?: string | null;
+          reason?: string | null;
+          before_state?: Json | null;
+          after_state?: Json | null;
+          metadata?: Json | null;
+          request_id?: string | null;
+          ip_address?: string | null;
+          user_agent?: string | null;
+          approved_by_admin_id?: string | null;
+          approved_at?: string | null;
+        };
+        Update: Partial<AdminAuditLogRow>;
+        Relationships: [];
+      };
+      user_notes: {
+        Row: UserNoteRow;
+        Insert: {
+          user_id: string;
+          author_admin_id?: string | null;
+          note_type?: UserNoteRow["note_type"];
+          body: string;
+          is_pinned?: boolean;
+          is_internal_only?: boolean;
+          deleted_at?: string | null;
+        };
+        Update: Partial<Omit<UserNoteRow, "id" | "created_at">>;
+        Relationships: [];
+      };
+      user_tags: {
+        Row: UserTagRow;
+        Insert: Omit<UserTagRow, "id" | "created_at">;
+        Update: Partial<UserTagRow>;
+        Relationships: [];
+      };
+      user_tag_assignments: {
+        Row: UserTagAssignmentRow;
+        Insert: {
+          user_id: string;
+          tag_id: string;
+          assigned_by_admin_id?: string | null;
+        };
+        Update: Partial<UserTagAssignmentRow>;
+        Relationships: [];
+      };
+      user_flags: {
+        Row: UserFlagRow;
+        Insert: Omit<UserFlagRow, "id" | "created_at">;
+        Update: Partial<UserFlagRow>;
+        Relationships: [];
+      };
+      user_flag_assignments: {
+        Row: UserFlagAssignmentRow;
+        Insert: {
+          user_id: string;
+          flag_id: string;
+          status?: UserFlagAssignmentRow["status"];
+          reason?: string | null;
+          assigned_by_admin_id?: string | null;
+          resolved_by_admin_id?: string | null;
+          resolved_at?: string | null;
+        };
+        Update: Partial<Omit<UserFlagAssignmentRow, "id" | "created_at">>;
+        Relationships: [];
+      };
+      saved_views: {
+        Row: SavedViewRow;
+        Insert: Omit<SavedViewRow, "id" | "created_at" | "updated_at">;
+        Update: Partial<Omit<SavedViewRow, "id" | "created_at">>;
         Relationships: [];
       };
       // Legacy/optional
@@ -190,17 +532,19 @@ export type Database = {
         Args: { p_username: string; p_password: string };
         Returns: Json;
       };
-      admin_validate_session: {
-        Args: { p_token: string };
-        Returns: Json;
-      };
-      admin_logout: {
-        Args: { p_token: string };
+      admin_create_user: {
+        Args: {
+          p_username: string;
+          p_email: string;
+          p_display_name: string;
+          p_password: string;
+          p_role?: string;
+        };
         Returns: Json;
       };
       admin_change_password: {
         Args: {
-          p_admin_token: string;
+          p_admin_id: string;
           p_old_password: string;
           p_new_password: string;
         };

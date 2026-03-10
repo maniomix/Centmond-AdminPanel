@@ -102,7 +102,18 @@ export default async function SettingsPage() {
           <CardContent className="p-0 px-6">
             {allAdmins && allAdmins.length > 0 ? (
               <AdminAccessForm
-                admins={allAdmins as { id: string; username: string; display_name: string | null; role: "super_admin" | "admin" | "viewer" }[]}
+                admins={allAdmins as {
+                  id: string;
+                  username: string;
+                  display_name: string | null;
+                  role:
+                    | "super_admin"
+                    | "operations_admin"
+                    | "support_admin"
+                    | "finance_admin"
+                    | "moderation_admin"
+                    | "analyst";
+                }[]}
                 currentAdminId={adminId}
               />
             ) : (

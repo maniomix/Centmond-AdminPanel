@@ -6,6 +6,13 @@ export type {
   OrderRow,
   ContentRow,
   ActivityLogRow,
+  AdminUserRow,
+  AdminRoleRow,
+  AdminAuditLogRow,
+  UserNoteRow,
+  UserTagRow,
+  UserFlagRow,
+  SavedViewRow,
 } from "./database";
 
 export interface PaginatedResponse<T> {

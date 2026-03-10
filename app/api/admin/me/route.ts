@@ -1,33 +1,24 @@
-import { NextRequest, NextResponse } from "next/server";
-import { ADMIN_SESSION_COOKIE, verifyAdminSession } from "@/lib/admin-auth";
+import { NextResponse } from "next/server";
+import { getAdminContext } from "@/lib/admin/permissions";
+import { clearAdminSessionCookie } from "@/lib/admin-session";
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    const token = request.cookies.get(ADMIN_SESSION_COOKIE)?.value;
-
-    if (!token) {
-      return NextResponse.json(
-        { valid: false, error: "No session" },
-        { status: 401 }
-      );
-    }
-
-    const session = await verifyAdminSession(token);
-    if (!session) {
-      const response = NextResponse.json(
-        { valid: false, error: "Session expired" },
-        { status: 401 }
-      );
-      response.cookies.delete(ADMIN_SESSION_COOKIE);
-      return response;
+    const admin = await getAdminContext();
+    if (!admin) {
+      await clearAdminSessionCookie();
+      return NextResponse.json({ valid: false, error: "Session expired" }, { status: 401 });
     }
 
     return NextResponse.json({
       valid: true,
       admin: {
-        id: session.sub,
-        username: session.username,
-        role: session.role,
+        id: admin.id,
+        username: admin.username,
+        email: admin.email,
+        role: admin.role,
+        roles: admin.roleKeys,
+        permissions: Array.from(admin.permissions),
       },
     });
   } catch (err) {

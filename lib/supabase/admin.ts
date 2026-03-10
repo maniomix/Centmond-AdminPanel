@@ -1,17 +1,14 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import { getAdminEnv } from "@/lib/admin/env";
 
 // Only use on server side — never expose to client
 export function createAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceRoleKey) {
-    throw new Error("Supabase admin env vars are missing");
-  }
+  const { NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } = getAdminEnv();
 
   return createClient<Database>(
-    url,
-    serviceRoleKey,
+    NEXT_PUBLIC_SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY,
     {
       auth: {
         autoRefreshToken: false,

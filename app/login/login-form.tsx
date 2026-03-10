@@ -12,8 +12,9 @@ import { Label } from "@/components/ui/label";
 import { loginAction } from "./actions";
 
 const loginSchema = z.object({
-  username: z.string().min(1, "Username is required"),
+  identifier: z.string().min(1, "Username or email is required"),
   password: z.string().min(1, "Password is required"),
+  rememberMe: z.boolean(),
 });
 
 type LoginValues = z.infer<typeof loginSchema>;
@@ -31,11 +32,18 @@ export function LoginForm() {
     formState: { errors },
   } = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
+    defaultValues: {
+      rememberMe: false,
+    },
   });
 
   async function onSubmit(values: LoginValues) {
     setLoading(true);
-    const result = await loginAction(values.username, values.password);
+    const result = await loginAction(
+      values.identifier,
+      values.password,
+      values.rememberMe
+    );
 
     if (result.error) {
       toast.error(result.error);
@@ -56,17 +64,17 @@ export function LoginForm() {
       )}
 
       <div className="space-y-1.5">
-        <Label htmlFor="username">Username</Label>
+        <Label htmlFor="identifier">Username or Email</Label>
         <Input
-          id="username"
+          id="identifier"
           type="text"
-          placeholder="Enter your username"
-          autoComplete="username"
+          placeholder="admin@example.com"
+          autoComplete="username email"
           autoCapitalize="none"
-          {...register("username")}
+          {...register("identifier")}
         />
-        {errors.username && (
-          <p className="text-xs text-red-600">{errors.username.message}</p>
+        {errors.identifier && (
+          <p className="text-xs text-red-600">{errors.identifier.message}</p>
         )}
       </div>
 
@@ -82,6 +90,11 @@ export function LoginForm() {
           <p className="text-xs text-red-600">{errors.password.message}</p>
         )}
       </div>
+
+      <label className="flex items-center gap-2 text-sm text-neutral-600">
+        <input type="checkbox" {...register("rememberMe")} className="h-4 w-4" />
+        Keep this admin session for longer on this device
+      </label>
 
       <Button type="submit" className="w-full" disabled={loading}>
         {loading ? "Signing in..." : "Sign in"}

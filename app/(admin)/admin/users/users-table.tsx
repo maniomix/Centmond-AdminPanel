@@ -1,34 +1,60 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import Link from "next/link";
-import { Eye, MoreHorizontal, ReceiptText, ShieldCheck } from "lucide-react";
 import { DataTable } from "@/components/shared/data-table";
 import { Pagination } from "@/components/shared/pagination";
 import { SearchFilter } from "@/components/shared/search-filter";
 import { LiveRefresh } from "@/components/shared/live-refresh";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { formatDateShort } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { extractUserCategories } from "@/lib/user-admin";
 import type { UserRow } from "@/types";
+import { UserBulkActions } from "@/components/admin/users/user-bulk-actions";
+import { UserRowActions } from "./user-row-actions";
 
 const verificationOptions = [
   { label: "Verified", value: "verified" },
   { label: "Unverified", value: "unverified" },
 ];
 
+const statusVariant: Record<
+  string,
+  "success" | "warning" | "destructive" | "secondary"
+> = {
+  active: "success",
+  suspended: "warning",
+  banned: "destructive",
+  flagged: "destructive",
+  under_review: "warning",
+  pending_verification: "secondary",
+  soft_deleted: "destructive",
+  inactive: "secondary",
+};
+
 const planVariant: Record<string, "default" | "secondary" | "success"> = {
   free: "secondary",
   monthly: "default",
   yearly: "success",
 };
+
+function humanizeIdentifier(value: string | null | undefined): string {
+  const normalized = value?.trim();
+  if (!normalized) return "Unknown";
+
+  return normalized
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function formatPlatformLabel(value: string | null): string {
+  if (!value?.trim()) return "Manual access";
+  return humanizeIdentifier(value);
+}
 
 interface UsersTableProps {
   users: UserRow[];
@@ -42,11 +68,40 @@ interface UsersTableProps {
   subscriptionByUserId: Record<
     string,
     {
+      id: string;
       plan: string;
       status: string;
       updated_at: string;
+      current_period_end: string | null;
+      platform: string | null;
     }
   >;
+  onlineUserIds: string[];
+  activityByUserId: Record<
+    string,
+    {
+      eventCount: number;
+      topEvent: string | null;
+    }
+  >;
+  allTags: Array<{
+    id: string;
+    key: string;
+    label: string;
+    color: string | null;
+  }>;
+  capabilities: {
+    canEditUsers: boolean;
+    canSuspendUsers: boolean;
+    canBanUsers: boolean;
+    canReactivateUsers: boolean;
+    canSoftDeleteUsers: boolean;
+    canManageSubscriptions: boolean;
+    canManageTags: boolean;
+    canRunBulkActions: boolean;
+    canReviewUsers: boolean;
+    canViewTransactions: boolean;
+  };
 }
 
 export function UsersTable({
@@ -59,13 +114,19 @@ export function UsersTable({
   sortBy,
   sortOrder,
   subscriptionByUserId,
+  onlineUserIds,
+  activityByUserId,
+  allTags,
+  capabilities,
 }: UsersTableProps) {
   const router = useRouter();
   const pathname = usePathname();
   const totalPages = Math.ceil(count / pageSize);
+  const onlineIdSet = useMemo(() => new Set(onlineUserIds), [onlineUserIds]);
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
 
   const liveTables = useMemo(
-    () => [{ table: "users" }, { table: "subscriptions" }],
+    () => [{ table: "users" }, { table: "subscriptions" }, { table: "events" }],
     []
   );
 
@@ -86,15 +147,51 @@ export function UsersTable({
     router.push(buildUrl({ sortBy: key, sortOrder: newOrder, page: "1" }));
   }
 
+  function toggleUserSelection(userId: string) {
+    setSelectedUserIds((current) =>
+      current.includes(userId)
+        ? current.filter((id) => id !== userId)
+        : [...current, userId]
+    );
+  }
+
+  function selectAllOnPage() {
+    setSelectedUserIds(users.map((user) => user.id));
+  }
+
+  function clearSelection() {
+    setSelectedUserIds([]);
+  }
+
   const columns = [
+    {
+      key: "select",
+      label: "Select",
+      className: "w-14",
+      render: (row: UserRow) => (
+        <input
+          type="checkbox"
+          checked={selectedUserIds.includes(row.id)}
+          onChange={() => toggleUserSelection(row.id)}
+          aria-label={`Select ${row.email}`}
+          className="h-4 w-4 rounded border-neutral-300"
+        />
+      ),
+    },
     {
       key: "display_name",
       label: "User",
       sortable: true,
       render: (row: UserRow) => (
         <div>
-          <p className="font-medium text-neutral-900">
-            {(row.display_name ?? "Unnamed").trim()}
+          <p className="flex items-center gap-2 font-medium text-neutral-900">
+            <span
+              className={cn(
+                "h-2 w-2 rounded-full",
+                onlineIdSet.has(row.id) ? "bg-green-500" : "bg-neutral-300"
+              )}
+            />
+            {row.display_name?.trim() || "Unnamed"}
           </p>
           <p className="text-xs text-neutral-500">{row.email}</p>
         </div>
@@ -111,6 +208,16 @@ export function UsersTable({
       ),
     },
     {
+      key: "status",
+      label: "Status",
+      sortable: true,
+      render: (row: UserRow) => (
+        <Badge variant={statusVariant[row.status] ?? "secondary"} className="capitalize text-xs">
+          {humanizeIdentifier(row.status)}
+        </Badge>
+      ),
+    },
+    {
       key: "subscription",
       label: "Subscription",
       render: (row: UserRow) => {
@@ -118,13 +225,83 @@ export function UsersTable({
         if (!subscription) {
           return <span className="text-xs text-neutral-400">No subscription</span>;
         }
+        const showStatus =
+          subscription.status.trim().toLowerCase() !== subscription.plan.trim().toLowerCase();
 
         return (
-          <div className="flex items-center gap-2">
-            <Badge variant={planVariant[subscription.plan] ?? "secondary"} className="capitalize text-xs">
-              {subscription.plan}
-            </Badge>
-            <span className="text-xs text-neutral-500 capitalize">{subscription.status}</span>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <Badge
+                variant={planVariant[subscription.plan] ?? "secondary"}
+                className="capitalize text-xs"
+              >
+                {subscription.plan}
+              </Badge>
+              {showStatus ? (
+                <span className="text-xs text-neutral-500 capitalize">{subscription.status}</span>
+              ) : null}
+            </div>
+            <p className="text-xs text-neutral-400">
+              {subscription.current_period_end
+                ? `Until ${formatDateShort(subscription.current_period_end)}`
+                : formatPlatformLabel(subscription.platform)}
+            </p>
+          </div>
+        );
+      },
+    },
+    {
+      key: "custom_categories",
+      label: "Categories",
+      render: (row: UserRow) => {
+        const categories = extractUserCategories(row.custom_categories);
+        if (!categories.length) {
+          return <span className="text-xs text-neutral-400">No custom setup</span>;
+        }
+
+        return (
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-neutral-800">
+              {categories.length} custom {categories.length === 1 ? "category" : "categories"}
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {categories.slice(0, 2).map((category) => (
+                <span
+                  key={category}
+                  className="rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] text-neutral-600"
+                >
+                  {humanizeIdentifier(category)}
+                </span>
+              ))}
+              {categories.length > 2 ? (
+                <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] text-neutral-500">
+                  +{categories.length - 2} more
+                </span>
+              ) : null}
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      key: "recent_activity",
+      label: "7d Activity",
+      render: (row: UserRow) => {
+        const activity = activityByUserId[row.id];
+        if (!activity?.eventCount) {
+          return <span className="text-xs text-neutral-400">Quiet</span>;
+        }
+
+        return (
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-neutral-800">
+              {activity.eventCount} event{activity.eventCount === 1 ? "" : "s"}
+            </p>
+            <p className="text-xs text-neutral-500">
+              {activity.topEvent
+                ? `Top: ${humanizeIdentifier(activity.topEvent)}`
+                : "Active in app"}
+            </p>
           </div>
         );
       },
@@ -139,7 +316,7 @@ export function UsersTable({
     },
     {
       key: "last_active_at",
-      label: "Last Active",
+      label: "Last Seen",
       sortable: true,
       render: (row: UserRow) => (
         <span className="text-neutral-500">
@@ -152,48 +329,58 @@ export function UsersTable({
       label: "",
       className: "w-12",
       render: (row: UserRow) => (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8">
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem asChild>
-              <Link href={`/admin/users/${row.id}`} className="cursor-pointer">
-                <Eye className="mr-2 h-4 w-4" />
-                View details
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link href={`/admin/users/${row.id}/transactions`} className="cursor-pointer">
-                <ReceiptText className="mr-2 h-4 w-4" />
-                Transactions
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link href={`/admin/subscriptions?userId=${row.id}`} className="cursor-pointer">
-                <ShieldCheck className="mr-2 h-4 w-4" />
-                Subscription
-              </Link>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <UserRowActions
+          user={row}
+          subscription={subscriptionByUserId[row.id] ?? null}
+          capabilities={capabilities}
+        />
       ),
     },
   ];
 
   return (
     <div className="space-y-4">
-      <LiveRefresh tables={liveTables} intervalFallbackMs={30000} />
-      <SearchFilter
-        search={search}
-        onSearchChange={(value) => router.push(buildUrl({ search: value, page: "1" }))}
-        statusFilter={verification}
-        onStatusChange={(value) => router.push(buildUrl({ verification: value, page: "1" }))}
-        statusOptions={verificationOptions}
-        placeholder="Search by name or email..."
-      />
+      <LiveRefresh tables={liveTables} intervalFallbackMs={3000} />
+      {selectedUserIds.length ? (
+        <UserBulkActions
+          selectedUserIds={selectedUserIds}
+          allTags={allTags}
+          capabilities={{
+            canSuspendUsers: capabilities.canSuspendUsers,
+            canReactivateUsers: capabilities.canReactivateUsers,
+            canManageTags: capabilities.canManageTags,
+            canRunBulkActions: capabilities.canRunBulkActions,
+            canReviewUsers: capabilities.canReviewUsers,
+          }}
+          onClearSelection={clearSelection}
+        />
+      ) : null}
+      <div className="flex items-center justify-between gap-3">
+        <SearchFilter
+          search={search}
+          onSearchChange={(value) => router.push(buildUrl({ search: value, page: "1" }))}
+          statusFilter={verification}
+          onStatusChange={(value) => router.push(buildUrl({ verification: value, page: "1" }))}
+          statusOptions={verificationOptions}
+          placeholder="Search by name or email..."
+        />
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="text-xs font-medium text-neutral-500 hover:text-neutral-800"
+            onClick={selectAllOnPage}
+          >
+            Select page
+          </button>
+          <button
+            type="button"
+            className="text-xs font-medium text-neutral-500 hover:text-neutral-800"
+            onClick={clearSelection}
+          >
+            Clear
+          </button>
+        </div>
+      </div>
       <DataTable
         columns={columns}
         data={users}

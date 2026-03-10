@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ADMIN_SESSION_COOKIE, verifyAdminSession } from "@/lib/admin-auth";
+import { ADMIN_SESSION_COOKIE, verifySignedAdminSessionToken } from "@/lib/admin-auth";
 
 function buildLoginRedirect(request: NextRequest) {
   const loginUrl = new URL("/login", request.url);
@@ -19,13 +19,9 @@ export async function proxy(request: NextRequest) {
   }
 
   const token = request.cookies.get(ADMIN_SESSION_COOKIE)?.value;
-  const session = token ? await verifyAdminSession(token) : null;
+  const session = token ? await verifySignedAdminSessionToken(token) : null;
 
   if (isLoginPage) {
-    if (session) {
-      return NextResponse.redirect(new URL("/dashboard", request.url));
-    }
-
     const response = NextResponse.next();
     if (token && !session) {
       response.cookies.delete(ADMIN_SESSION_COOKIE);

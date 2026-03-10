@@ -6,6 +6,7 @@ import { Pencil, MoreHorizontal } from "lucide-react";
 import { DataTable } from "@/components/shared/data-table";
 import { Pagination } from "@/components/shared/pagination";
 import { SearchFilter } from "@/components/shared/search-filter";
+import { LiveRefresh } from "@/components/shared/live-refresh";
 import { DeleteDialog } from "@/components/shared/delete-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -146,6 +147,7 @@ export function ContentTable({ content, count, page, pageSize, search, status, s
 
   return (
     <div className="space-y-4">
+      <LiveRefresh tables={[{ table: "content" }]} intervalFallbackMs={3000} />
       <SearchFilter
         search={search}
         onSearchChange={(v) => router.push(buildUrl({ search: v, page: "1" }))}

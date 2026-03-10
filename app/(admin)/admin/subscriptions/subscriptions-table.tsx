@@ -70,6 +70,7 @@ interface SubscriptionsTableProps {
   pageSize: number;
   search: string;
   userId: string;
+  tier: "all" | "paid" | "free" | "purchased";
   status: string;
   plan: string;
   sortBy: string;
@@ -101,6 +102,7 @@ export function SubscriptionsTable({
   pageSize,
   search,
   userId,
+  tier,
   status,
   plan,
   sortBy,
@@ -139,6 +141,7 @@ export function SubscriptionsTable({
       page: String(page),
       search,
       userId,
+      tier,
       status,
       plan,
       sortBy,
@@ -292,7 +295,7 @@ export function SubscriptionsTable({
 
   return (
     <>
-      <LiveRefresh tables={liveTables} intervalFallbackMs={30000} />
+      <LiveRefresh tables={liveTables} intervalFallbackMs={3000} />
       <div className="space-y-4">
         <div className="flex items-center gap-2">
           <div className="flex-1">
@@ -305,6 +308,22 @@ export function SubscriptionsTable({
               placeholder="Search by user name or email..."
             />
           </div>
+          <Select
+            value={tier}
+            onValueChange={(value: "all" | "paid" | "free" | "purchased") =>
+              router.push(buildUrl({ tier: value, page: "1" }))
+            }
+          >
+            <SelectTrigger className="w-44">
+              <SelectValue placeholder="All tiers" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All tiers</SelectItem>
+              <SelectItem value="purchased">Purchased</SelectItem>
+              <SelectItem value="paid">Premium</SelectItem>
+              <SelectItem value="free">Free</SelectItem>
+            </SelectContent>
+          </Select>
           <Select
             value={plan}
             onValueChange={(value) => router.push(buildUrl({ plan: value, page: "1" }))}

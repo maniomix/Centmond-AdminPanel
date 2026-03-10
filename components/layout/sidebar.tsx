@@ -1,37 +1,85 @@
 "use client";
 
 import Link from "next/link";
+import type { ComponentType } from "react";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Users,
   ShieldCheck,
+  Filter,
   Settings,
   Activity,
+  Search,
+  Shield,
+  FileSearch,
   ChevronRight,
+  AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { AdminPermissionKey } from "@/lib/admin/constants";
 
-const navItems = [
+interface NavItem {
+  label: string;
+  href: string;
+  icon: ComponentType<{ className?: string }>;
+  anyPermissions?: AdminPermissionKey[];
+}
+
+const navItems: NavItem[] = [
   {
     label: "Dashboard",
     href: "/dashboard",
     icon: LayoutDashboard,
+    anyPermissions: ["dashboard.view"],
   },
   {
     label: "Users",
     href: "/admin/users",
     icon: Users,
+    anyPermissions: ["users.view"],
+  },
+  {
+    label: "Admins",
+    href: "/admin/admins",
+    icon: Shield,
+    anyPermissions: ["admins.view"],
   },
   {
     label: "Subscriptions",
     href: "/admin/subscriptions",
     icon: ShieldCheck,
+    anyPermissions: ["subscriptions.view"],
   },
   {
-    label: "Activity",
+    label: "Search",
+    href: "/admin/search",
+    icon: Search,
+    anyPermissions: ["users.view"],
+  },
+  {
+    label: "Segments",
+    href: "/admin/segments",
+    icon: Filter,
+    anyPermissions: ["users.view"],
+  },
+  {
+    label: "Product Activity",
     href: "/admin/activity-logs",
     icon: Activity,
+    anyPermissions: ["dashboard.view"],
+  },
+  {
+    label: "Audit Logs",
+    href: "/admin/audit-logs",
+    icon: FileSearch,
+    anyPermissions: ["audit_logs.view"],
+  },
+  {
+    label: "Review Queue",
+    href: "/admin/reviews",
+    icon: AlertTriangle,
+    anyPermissions: ["reviews.manage"],
   },
   {
     label: "Settings",
@@ -40,8 +88,19 @@ const navItems = [
   },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  roleKeys?: string[];
+  permissions?: AdminPermissionKey[];
+}
+
+export function Sidebar({ roleKeys = [], permissions = [] }: SidebarProps) {
   const pathname = usePathname();
+  const isSuperAdmin = roleKeys.includes("super_admin");
+  const visibleItems = navItems.filter((item) => {
+    if (!item.anyPermissions?.length) return true;
+    if (isSuperAdmin) return true;
+    return item.anyPermissions.some((permission) => permissions.includes(permission));
+  });
 
   return (
     <aside className="flex h-screen w-60 flex-col border-r border-neutral-200 bg-white">
@@ -54,7 +113,7 @@ export function Sidebar() {
 
       {/* Nav */}
       <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto p-3">
-        {navItems.map((item) => {
+        {visibleItems.map((item) => {
           const Icon = item.icon;
           const isActive =
             item.href === "/dashboard"
