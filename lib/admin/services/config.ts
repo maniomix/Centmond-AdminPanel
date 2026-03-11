@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isMissingTableError } from "@/lib/admin/table-error-utils";
 import type { Json } from "@/types/database";
 
 export async function listFeatureFlags() {
@@ -9,6 +10,9 @@ export async function listFeatureFlags() {
     .order("updated_at", { ascending: false });
 
   if (error) {
+    if (isMissingTableError(error.message, "feature_flags")) {
+      return [];
+    }
     throw new Error(error.message);
   }
 
@@ -48,6 +52,9 @@ export async function listInternalSettings() {
     .order("updated_at", { ascending: false });
 
   if (error) {
+    if (isMissingTableError(error.message, "internal_settings")) {
+      return [];
+    }
     throw new Error(error.message);
   }
 

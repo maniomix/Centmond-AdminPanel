@@ -14,7 +14,7 @@ export async function requestExportJobAction(values: unknown) {
 
   try {
     return await runAdminMutation({
-      permission: "exports.run",
+      permission: "exports.manage",
       requireRecentAuth: true,
       execute: async (actor) => {
         const job = await createAndRunExportJob({

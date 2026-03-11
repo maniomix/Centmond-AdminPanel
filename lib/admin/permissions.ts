@@ -9,6 +9,7 @@ import {
   type AdminPermissionKey,
   type AdminRole,
 } from "@/lib/admin/constants";
+import { hasAdminPermission } from "@/lib/admin/permission-utils";
 
 export interface AdminContext {
   id: string;
@@ -93,9 +94,7 @@ export function hasPermission(
   context: Pick<AdminContext, "permissions" | "roleKeys"> | null,
   permission: AdminPermissionKey
 ): boolean {
-  if (!context) return false;
-  if (context.roleKeys.includes("super_admin")) return true;
-  return context.permissions.has(permission);
+  return hasAdminPermission(context, permission);
 }
 
 export async function requirePermission(

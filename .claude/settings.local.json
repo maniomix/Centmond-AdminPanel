@@ -7,7 +7,8 @@
       "Bash(npx tsc:*)",
       "Bash(npm rebuild:*)",
       "Bash(./node_modules/.bin/tsc:*)",
-      "Bash(ls \"/Users/mani/Desktop/Centmond-AdminPanel/app/\\(admin\\)/admin/orders/[id]/\")"
+      "Bash(ls \"/Users/mani/Desktop/Centmond-AdminPanel/app/\\(admin\\)/admin/orders/[id]/\")",
+      "Bash(grep -rn \"Failed to run sql query\\\\|run sql query\" /Users/mani/Desktop/Centmond-AdminPanel/ --include=*.ts --include=*.tsx)"
     ]
   }
 }

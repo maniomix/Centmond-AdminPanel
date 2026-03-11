@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isMissingBulkJobsTableError } from "@/lib/admin/bulk-jobs-utils";
 import type { Json } from "@/types/database";
 
 export async function createBulkJob(input: {
@@ -72,6 +73,9 @@ export async function listRecentBulkJobs(limit = 10) {
     .limit(limit);
 
   if (error) {
+    if (isMissingBulkJobsTableError(error.message)) {
+      return [];
+    }
     throw new Error(error.message);
   }
 

@@ -28,11 +28,22 @@ The permission model is defined across:
 
 - dashboard and read access: `dashboard.view`, `users.view`, `subscriptions.view`, `billing.view`
 - user lifecycle: `users.edit`, `users.suspend`, `users.ban`, `users.reactivate`, `users.soft_delete`
-- user security: `users.sessions.manage`
-- reviews and risk: `reviews.manage`, `risk.view`, `risk.manage`, `flags.manage`
+- user security: `user_sessions.view`, `user_sessions.manage`
+- reviews and risk: `review_queue.manage`, `risk.view`, `risk.manage`, `flags.manage`
 - admin access: `admins.view`, `admins.create`, `admins.edit`, `admins.deactivate`, `admins.sessions.manage`, `roles.assign`
-- finance and exports: `finance.manage`, `finance.notes.manage`, `exports.run`
-- config: `feature_flags.manage`, `internal_settings.manage`, `settings.manage`
+- finance and exports: `finance.view`, `finance.manage`, `finance.notes.manage`, `exports.view`, `exports.manage`
+- config: `feature_flags.view`, `feature_flags.manage`, `internal_settings.view`, `internal_settings.manage`, `settings.manage`
+- support workflow: `support_handoffs.manage`
+
+## Compatibility Notes
+
+The repository currently keeps a small compatibility layer for older permission keys while the schema catches up:
+
+- `users.sessions.manage` is treated as equivalent to `user_sessions.manage`
+- `reviews.manage` is treated as equivalent to `review_queue.manage`
+- `exports.run` is treated as equivalent to `exports.manage`
+
+New pages and actions should prefer the explicit `view` / `manage` keys.
 
 ## Enforcement Rules
 

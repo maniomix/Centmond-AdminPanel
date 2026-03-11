@@ -4,13 +4,13 @@ import { Badge } from "@/components/ui/badge";
 import { formatEuroAmount } from "@/lib/money";
 import { formatDate } from "@/lib/utils";
 import { getFinanceOverview } from "@/lib/admin/services/finance";
-import { hasPermission, requireAnyPermission } from "@/lib/admin/permissions";
+import { hasPermission, requirePermission } from "@/lib/admin/permissions";
 import { FinanceEventForm } from "./finance-event-form";
 
 export const revalidate = 0;
 
 export default async function FinancePage() {
-  const adminContext = await requireAnyPermission(["finance.manage", "billing.view"]);
+  const adminContext = await requirePermission("finance.view");
   const overview = await getFinanceOverview();
   const canManageFinance = hasPermission(adminContext, "finance.manage");
 

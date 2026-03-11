@@ -12,10 +12,10 @@ test("phase 2 route modules enforce permissions server-side", () => {
   const featureFlagsPage = read("app/(admin)/admin/feature-flags/page.tsx");
   const internalSettingsPage = read("app/(admin)/admin/internal-settings/page.tsx");
 
-  assert.match(financePage, /requireAnyPermission\(\["finance\.manage", "billing\.view"\]\)/);
-  assert.match(exportsPage, /requirePermission\("exports\.run"\)/);
-  assert.match(featureFlagsPage, /requirePermission\("feature_flags\.manage"\)/);
-  assert.match(internalSettingsPage, /requirePermission\("internal_settings\.manage"\)/);
+  assert.match(financePage, /requirePermission\("finance\.view"\)/);
+  assert.match(exportsPage, /requirePermission\("exports\.view"\)/);
+  assert.match(featureFlagsPage, /requirePermission\("feature_flags\.view"\)/);
+  assert.match(internalSettingsPage, /requirePermission\("internal_settings\.view"\)/);
 });
 
 test("phase 2 data access uses real security tables and job-backed operations", () => {
@@ -27,5 +27,5 @@ test("phase 2 data access uses real security tables and job-backed operations", 
   assert.match(userDetailPage, /SupportHandoffsPanel/);
   assert.match(usersActions, /createBulkJob\(/);
   assert.match(usersActions, /updateBulkJobState\(/);
-  assert.match(exportsRoute, /hasPermission\(admin, "exports\.run"\)/);
+  assert.match(exportsRoute, /hasPermission\(admin, "exports\.manage"\)/);
 });

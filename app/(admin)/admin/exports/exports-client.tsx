@@ -19,6 +19,7 @@ import { formatDate } from "@/lib/utils";
 import { requestExportJobAction } from "./actions";
 
 interface ExportsClientProps {
+  canCreateExports?: boolean;
   jobs: Array<{
     id: string;
     export_type: string;
@@ -34,7 +35,10 @@ interface ExportsClientProps {
   }>;
 }
 
-export function ExportsClient({ jobs }: ExportsClientProps) {
+export function ExportsClient({
+  jobs,
+  canCreateExports = false,
+}: ExportsClientProps) {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [scope, setScope] = useState<"users" | "subscriptions" | "audit_logs" | "review_queue">(
@@ -77,34 +81,42 @@ export function ExportsClient({ jobs }: ExportsClientProps) {
             Export jobs are permissioned, audited, and expire after a short window.
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-[180px_1fr_auto]">
-          <div className="space-y-1.5">
-            <Label>Scope</Label>
-            <Select value={scope} onValueChange={(value) => setScope(value as typeof scope)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="users">Users</SelectItem>
-                <SelectItem value="subscriptions">Subscriptions</SelectItem>
-                <SelectItem value="audit_logs">Audit Logs</SelectItem>
-                <SelectItem value="review_queue">Review Queue</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Reason</Label>
-            <Input
-              value={reason}
-              onChange={(event) => setReason(event.target.value)}
-              placeholder="Why is this export required?"
-            />
-          </div>
-          <div className="flex items-end">
-            <Button onClick={handleCreate} disabled={submitting || !reason.trim()}>
-              {submitting ? "Generating..." : "Generate export"}
-            </Button>
-          </div>
+        <CardContent className="space-y-3">
+          {canCreateExports ? (
+            <div className="grid gap-3 md:grid-cols-[180px_1fr_auto]">
+              <div className="space-y-1.5">
+                <Label>Scope</Label>
+                <Select value={scope} onValueChange={(value) => setScope(value as typeof scope)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="users">Users</SelectItem>
+                    <SelectItem value="subscriptions">Subscriptions</SelectItem>
+                    <SelectItem value="audit_logs">Audit Logs</SelectItem>
+                    <SelectItem value="review_queue">Review Queue</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Reason</Label>
+                <Input
+                  value={reason}
+                  onChange={(event) => setReason(event.target.value)}
+                  placeholder="Why is this export required?"
+                />
+              </div>
+              <div className="flex items-end">
+                <Button onClick={handleCreate} disabled={submitting || !reason.trim()}>
+                  {submitting ? "Generating..." : "Generate export"}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-neutral-500">
+              You can review export history here, but only export managers can create or download files.
+            </p>
+          )}
         </CardContent>
       </Card>
 
@@ -134,7 +146,7 @@ export function ExportsClient({ jobs }: ExportsClientProps) {
                     <span className="text-xs uppercase tracking-wide text-neutral-500">
                       {job.status}
                     </span>
-                    {job.status === "completed" ? (
+                    {canCreateExports && job.status === "completed" ? (
                       <Button asChild size="sm" variant="outline">
                         <Link href={`/api/admin/exports/${job.id}`}>Download</Link>
                       </Button>

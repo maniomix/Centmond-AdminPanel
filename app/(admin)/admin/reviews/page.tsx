@@ -7,13 +7,24 @@ import { listReviewQueueData } from "@/lib/admin/services/reviews";
 
 export const revalidate = 0;
 
-type QueueFilter = "all" | "under_review" | "escalated" | "restricted" | "resolved";
+type QueueFilter =
+  | "all"
+  | "under_review"
+  | "escalated"
+  | "approved"
+  | "rejected"
+  | "restricted"
+  | "false_positive"
+  | "resolved";
 
 function parseQueue(value: string | undefined): QueueFilter {
   if (
     value === "under_review" ||
     value === "escalated" ||
+    value === "approved" ||
+    value === "rejected" ||
     value === "restricted" ||
+    value === "false_positive" ||
     value === "resolved"
   ) {
     return value;
@@ -26,7 +37,7 @@ export default async function ReviewsPage({
 }: {
   searchParams: Promise<{ page?: string; search?: string; queue?: string }>;
 }) {
-  await requirePermission("reviews.manage");
+  await requirePermission("review_queue.manage");
   const params = await searchParams;
   const page = parsePage(params.page);
   const pageSize = 20;

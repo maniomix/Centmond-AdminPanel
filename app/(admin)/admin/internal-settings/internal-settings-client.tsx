@@ -12,6 +12,7 @@ import { formatDate } from "@/lib/utils";
 import { upsertInternalSettingAction } from "./actions";
 
 interface InternalSettingsClientProps {
+  canManageSettings?: boolean;
   settings: Array<{
     key: string;
     label: string;
@@ -22,7 +23,10 @@ interface InternalSettingsClientProps {
   }>;
 }
 
-export function InternalSettingsClient({ settings }: InternalSettingsClientProps) {
+export function InternalSettingsClient({
+  settings,
+  canManageSettings = false,
+}: InternalSettingsClientProps) {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
@@ -82,37 +86,45 @@ export function InternalSettingsClient({ settings }: InternalSettingsClientProps
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <div className="space-y-1.5">
-              <Label>Key</Label>
-              <Input value={form.key} onChange={(event) => setForm((current) => ({ ...current, key: event.target.value }))} placeholder="billing.refund_max_days" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Label</Label>
-              <Input value={form.label} onChange={(event) => setForm((current) => ({ ...current, label: event.target.value }))} placeholder="Refund max days" />
-            </div>
-            <label className="flex items-end gap-2 text-sm text-neutral-700">
-              <input type="checkbox" checked={form.isSensitive} onChange={(event) => setForm((current) => ({ ...current, isSensitive: event.target.checked }))} />
-              Sensitive
-            </label>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Description</Label>
-            <Input value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} placeholder="Explain what this setting controls" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Value (JSON)</Label>
-            <Textarea rows={5} value={form.value} onChange={(event) => setForm((current) => ({ ...current, value: event.target.value }))} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Reason</Label>
-            <Input value={form.reason} onChange={(event) => setForm((current) => ({ ...current, reason: event.target.value }))} placeholder="Why is this setting being changed?" />
-          </div>
-          <div className="flex justify-end">
-            <Button onClick={handleSubmit} disabled={submitting || !form.key.trim() || !form.label.trim() || !form.reason.trim()}>
-              {submitting ? "Saving..." : "Save internal setting"}
-            </Button>
-          </div>
+          {canManageSettings ? (
+            <>
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <div className="space-y-1.5">
+                  <Label>Key</Label>
+                  <Input value={form.key} onChange={(event) => setForm((current) => ({ ...current, key: event.target.value }))} placeholder="billing.refund_max_days" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Label</Label>
+                  <Input value={form.label} onChange={(event) => setForm((current) => ({ ...current, label: event.target.value }))} placeholder="Refund max days" />
+                </div>
+                <label className="flex items-end gap-2 text-sm text-neutral-700">
+                  <input type="checkbox" checked={form.isSensitive} onChange={(event) => setForm((current) => ({ ...current, isSensitive: event.target.checked }))} />
+                  Sensitive
+                </label>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Description</Label>
+                <Input value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} placeholder="Explain what this setting controls" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Value (JSON)</Label>
+                <Textarea rows={5} value={form.value} onChange={(event) => setForm((current) => ({ ...current, value: event.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Reason</Label>
+                <Input value={form.reason} onChange={(event) => setForm((current) => ({ ...current, reason: event.target.value }))} placeholder="Why is this setting being changed?" />
+              </div>
+              <div className="flex justify-end">
+                <Button onClick={handleSubmit} disabled={submitting || !form.key.trim() || !form.label.trim() || !form.reason.trim()}>
+                  {submitting ? "Saving..." : "Save internal setting"}
+                </Button>
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-neutral-500">
+              You can inspect operational settings here, but only configuration managers can change them.
+            </p>
+          )}
         </CardContent>
       </Card>
 

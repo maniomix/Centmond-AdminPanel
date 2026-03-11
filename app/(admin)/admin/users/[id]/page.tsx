@@ -28,7 +28,7 @@ import { hasPermission, requirePermission } from "@/lib/admin/permissions";
 import { UserTimelinePanel } from "@/components/admin/users/user-timeline-panel";
 import { UserSecurityPanel } from "@/components/admin/users/user-security-panel";
 import { SupportHandoffsPanel } from "@/components/admin/users/support-handoffs-panel";
-import { listSupportHandoffsForUser, } from "@/lib/admin/services/reviews";
+import { listSupportHandoffsForUser } from "@/lib/admin/services/reviews";
 import { listUserSecurityData } from "@/lib/admin/services/user-security";
 
 const planVariant: Record<string, "default" | "secondary" | "success"> = {
@@ -81,6 +81,13 @@ export default async function UserDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const adminContext = await requirePermission("users.view");
+  const canViewUserSessions = hasPermission(adminContext, "user_sessions.view");
+  const canManageUserSessions = hasPermission(adminContext, "user_sessions.manage");
+  const canViewSupportHandoffs =
+    hasPermission(adminContext, "support_handoffs.manage") ||
+    hasPermission(adminContext, "support.view");
+  const canManageSupportHandoffs = hasPermission(adminContext, "support_handoffs.manage");
+  const canViewAuditHistory = hasPermission(adminContext, "audit_logs.view");
   const { id } = await params;
   const supabase = createAdminClient();
   const activitySinceIso = buildLookbackIso(ACTIVITY_WINDOW_DAYS);
@@ -157,15 +164,21 @@ export default async function UserDetailPage({
       .eq("user_id", id)
       .eq("status", "active")
       .order("created_at", { ascending: false }),
-    supabase
-      .from("admin_audit_logs")
-      .select("id, action_type, category, severity, reason, actor_admin_id, created_at")
-      .eq("target_entity_type", "user")
-      .eq("target_entity_id", id)
-      .order("created_at", { ascending: false })
-      .limit(12),
-    listUserSecurityData(id),
-    listSupportHandoffsForUser(id),
+    canViewAuditHistory
+      ? supabase
+          .from("admin_audit_logs")
+          .select("id, action_type, category, severity, reason, actor_admin_id, created_at")
+          .eq("target_entity_type", "user")
+          .eq("target_entity_id", id)
+          .order("created_at", { ascending: false })
+          .limit(12)
+      : Promise.resolve({ data: [] }),
+    canViewUserSessions
+      ? listUserSecurityData(id)
+      : Promise.resolve({ sessions: [], devices: [] }),
+    canViewSupportHandoffs
+      ? listSupportHandoffsForUser(id)
+      : Promise.resolve([]),
     supabase
       .from("admin_users")
       .select("id, username, display_name")
@@ -439,26 +452,25 @@ export default async function UserDetailPage({
             }
           />
 
-          <SupportHandoffsPanel
-            userId={id}
-            handoffs={supportHandoffs.map((handoff) => ({
-              ...handoff,
-              fromLabel: handoff.from_admin_id
-                ? adminLabelById.get(handoff.from_admin_id) ?? handoff.from_admin_id
-                : "Unknown admin",
-              toLabel: handoff.to_admin_id
-                ? adminLabelById.get(handoff.to_admin_id) ?? handoff.to_admin_id
-                : null,
-            }))}
-            adminOptions={(adminDirectory ?? []).map((admin) => ({
-              id: admin.id,
-              label: admin.display_name ?? admin.username,
-            }))}
-            canManageSupport={
-              hasPermission(adminContext, "support.notes.manage") ||
-              hasPermission(adminContext, "finance.notes.manage")
-            }
-          />
+          {canViewSupportHandoffs ? (
+            <SupportHandoffsPanel
+              userId={id}
+              handoffs={supportHandoffs.map((handoff) => ({
+                ...handoff,
+                fromLabel: handoff.from_admin_id
+                  ? adminLabelById.get(handoff.from_admin_id) ?? handoff.from_admin_id
+                  : "Unknown admin",
+                toLabel: handoff.to_admin_id
+                  ? adminLabelById.get(handoff.to_admin_id) ?? handoff.to_admin_id
+                  : null,
+              }))}
+              adminOptions={(adminDirectory ?? []).map((admin) => ({
+                id: admin.id,
+                label: admin.display_name ?? admin.username,
+              }))}
+              canManageSupport={canManageSupportHandoffs}
+            />
+          ) : null}
 
           <UserTimelinePanel items={timelineItems} />
         </div>
@@ -480,7 +492,7 @@ export default async function UserDetailPage({
               canReactivateUsers: hasPermission(adminContext, "users.reactivate"),
               canSoftDeleteUsers: hasPermission(adminContext, "users.soft_delete"),
               canManageSubscriptions: hasPermission(adminContext, "subscriptions.manage"),
-              canReviewUsers: hasPermission(adminContext, "reviews.manage"),
+              canReviewUsers: hasPermission(adminContext, "review_queue.manage"),
             }}
           />
 
@@ -606,41 +618,47 @@ export default async function UserDetailPage({
             canManageFlags={hasPermission(adminContext, "flags.manage")}
           />
 
-          <UserSecurityPanel
-            userId={id}
-            sessions={securityData.sessions}
-            devices={securityData.devices}
-            canManageSessions={hasPermission(adminContext, "users.sessions.manage")}
-          />
+          {canViewUserSessions ? (
+            <UserSecurityPanel
+              userId={id}
+              sessions={securityData.sessions}
+              devices={securityData.devices}
+              canManageSessions={canManageUserSessions}
+            />
+          ) : null}
 
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Admin Action History</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {adminAuditLogs?.length ? (
-                adminAuditLogs.map((log) => (
-                  <div key={log.id} className="rounded-lg border border-neutral-200 p-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-sm font-medium text-neutral-900">{log.action_type}</p>
-                      <p className="text-xs text-neutral-500">{formatDate(log.created_at)}</p>
+          {canViewAuditHistory ? (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Admin Action History</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {adminAuditLogs?.length ? (
+                  adminAuditLogs.map((log) => (
+                    <div key={log.id} className="rounded-lg border border-neutral-200 p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-sm font-medium text-neutral-900">{log.action_type}</p>
+                        <p className="text-xs text-neutral-500">{formatDate(log.created_at)}</p>
+                      </div>
+                      <p className="mt-1 text-xs text-neutral-500">
+                        {log.category} • {log.severity} •{" "}
+                        {log.actor_admin_id
+                          ? adminLabelById.get(log.actor_admin_id) ?? log.actor_admin_id
+                          : "Unknown admin"}
+                      </p>
+                      {log.reason ? (
+                        <p className="mt-2 text-sm text-neutral-700">{log.reason}</p>
+                      ) : null}
                     </div>
-                    <p className="mt-1 text-xs text-neutral-500">
-                      {log.category} • {log.severity} •{" "}
-                      {log.actor_admin_id
-                        ? adminLabelById.get(log.actor_admin_id) ?? log.actor_admin_id
-                        : "Unknown admin"}
-                    </p>
-                    {log.reason ? (
-                      <p className="mt-2 text-sm text-neutral-700">{log.reason}</p>
-                    ) : null}
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-neutral-400">No admin actions logged for this user yet.</p>
-              )}
-            </CardContent>
-          </Card>
+                  ))
+                ) : (
+                  <p className="text-sm text-neutral-400">
+                    No admin actions logged for this user yet.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          ) : null}
         </div>
       </div>
     </div>

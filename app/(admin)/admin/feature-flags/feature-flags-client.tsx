@@ -12,6 +12,7 @@ import { formatDate } from "@/lib/utils";
 import { upsertFeatureFlagAction } from "./actions";
 
 interface FeatureFlagsClientProps {
+  canManageFlags?: boolean;
   flags: Array<{
     key: string;
     label: string;
@@ -23,7 +24,10 @@ interface FeatureFlagsClientProps {
   }>;
 }
 
-export function FeatureFlagsClient({ flags }: FeatureFlagsClientProps) {
+export function FeatureFlagsClient({
+  flags,
+  canManageFlags = false,
+}: FeatureFlagsClientProps) {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
@@ -84,41 +88,49 @@ export function FeatureFlagsClient({ flags }: FeatureFlagsClientProps) {
           <CardDescription>Operational toggles should be explicit, documented, and audited.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <div className="space-y-1.5">
-              <Label>Key</Label>
-              <Input value={form.key} onChange={(event) => setForm((current) => ({ ...current, key: event.target.value }))} placeholder="ops.new_checkout" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Label</Label>
-              <Input value={form.label} onChange={(event) => setForm((current) => ({ ...current, label: event.target.value }))} placeholder="New checkout rollout" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Rollout %</Label>
-              <Input type="number" min="0" max="100" value={form.rolloutPercentage} onChange={(event) => setForm((current) => ({ ...current, rolloutPercentage: event.target.value }))} />
-            </div>
-            <label className="flex items-end gap-2 text-sm text-neutral-700">
-              <input type="checkbox" checked={form.enabled} onChange={(event) => setForm((current) => ({ ...current, enabled: event.target.checked }))} />
-              Enabled
-            </label>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Description</Label>
-            <Input value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} placeholder="Explain the operational intent" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Audience filters (JSON)</Label>
-            <Textarea rows={4} value={form.audienceFilters} onChange={(event) => setForm((current) => ({ ...current, audienceFilters: event.target.value }))} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Reason</Label>
-            <Input value={form.reason} onChange={(event) => setForm((current) => ({ ...current, reason: event.target.value }))} placeholder="Why is this flag being changed?" />
-          </div>
-          <div className="flex justify-end">
-            <Button onClick={handleSubmit} disabled={submitting || !form.key.trim() || !form.label.trim() || !form.reason.trim()}>
-              {submitting ? "Saving..." : "Save feature flag"}
-            </Button>
-          </div>
+          {canManageFlags ? (
+            <>
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <div className="space-y-1.5">
+                  <Label>Key</Label>
+                  <Input value={form.key} onChange={(event) => setForm((current) => ({ ...current, key: event.target.value }))} placeholder="ops.new_checkout" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Label</Label>
+                  <Input value={form.label} onChange={(event) => setForm((current) => ({ ...current, label: event.target.value }))} placeholder="New checkout rollout" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Rollout %</Label>
+                  <Input type="number" min="0" max="100" value={form.rolloutPercentage} onChange={(event) => setForm((current) => ({ ...current, rolloutPercentage: event.target.value }))} />
+                </div>
+                <label className="flex items-end gap-2 text-sm text-neutral-700">
+                  <input type="checkbox" checked={form.enabled} onChange={(event) => setForm((current) => ({ ...current, enabled: event.target.checked }))} />
+                  Enabled
+                </label>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Description</Label>
+                <Input value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} placeholder="Explain the operational intent" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Audience filters (JSON)</Label>
+                <Textarea rows={4} value={form.audienceFilters} onChange={(event) => setForm((current) => ({ ...current, audienceFilters: event.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Reason</Label>
+                <Input value={form.reason} onChange={(event) => setForm((current) => ({ ...current, reason: event.target.value }))} placeholder="Why is this flag being changed?" />
+              </div>
+              <div className="flex justify-end">
+                <Button onClick={handleSubmit} disabled={submitting || !form.key.trim() || !form.label.trim() || !form.reason.trim()}>
+                  {submitting ? "Saving..." : "Save feature flag"}
+                </Button>
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-neutral-500">
+              You can inspect flag state here, but only configuration managers can edit rollout settings.
+            </p>
+          )}
         </CardContent>
       </Card>
 

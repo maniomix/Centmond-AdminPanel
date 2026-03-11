@@ -9,6 +9,7 @@ import { LiveRefresh } from "@/components/shared/live-refresh";
 import { Badge } from "@/components/ui/badge";
 import { formatDateShort } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import { getSubscriptionBadgeVariant } from "@/lib/user-admin";
 import type { UserRow } from "@/types";
 import { UserBulkActions } from "@/components/admin/users/user-bulk-actions";
 import { UserRowActions } from "./user-row-actions";
@@ -37,6 +38,8 @@ const planVariant: Record<string, "default" | "secondary" | "success"> = {
   monthly: "default",
   yearly: "success",
 };
+
+const emphasizedSubscriptionStatuses = new Set(["cancelled", "canceled", "expired", "past_due"]);
 
 function humanizeIdentifier(value: string | null | undefined): string {
   const normalized = value?.trim();
@@ -225,10 +228,13 @@ export function UsersTable({
         if (!subscription) {
           return <span className="text-xs text-neutral-400">No subscription</span>;
         }
+        const normalizedStatus = subscription.status.trim().toLowerCase();
         const showStatus =
-          subscription.status.trim().toLowerCase() !== subscription.plan.trim().toLowerCase();
+          normalizedStatus !== subscription.plan.trim().toLowerCase();
+        const showStatusBadge = showStatus && emphasizedSubscriptionStatuses.has(normalizedStatus);
+        const statusLabel = humanizeIdentifier(subscription.status);
         const details = [
-          showStatus ? subscription.status.trim() : null,
+          !showStatusBadge && showStatus ? statusLabel : null,
           subscription.current_period_end
             ? `Until ${formatDateShort(subscription.current_period_end)}`
             : formatPlatformLabel(subscription.platform),
@@ -244,9 +250,12 @@ export function UsersTable({
             >
               {subscription.plan}
             </Badge>
-            <span className="text-xs text-neutral-500">
-              {humanizeIdentifier(details)}
-            </span>
+            {showStatusBadge ? (
+              <Badge variant={getSubscriptionBadgeVariant(subscription.status)} className="w-fit text-xs">
+                {statusLabel}
+              </Badge>
+            ) : null}
+            {details ? <span className="text-xs text-neutral-500">{humanizeIdentifier(details)}</span> : null}
           </div>
         );
       },

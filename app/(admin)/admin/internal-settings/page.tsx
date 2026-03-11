@@ -1,12 +1,12 @@
 import { PageHeader } from "@/components/shared/page-header";
-import { requirePermission } from "@/lib/admin/permissions";
+import { hasPermission, requirePermission } from "@/lib/admin/permissions";
 import { listInternalSettings } from "@/lib/admin/services/config";
 import { InternalSettingsClient } from "./internal-settings-client";
 
 export const revalidate = 0;
 
 export default async function InternalSettingsPage() {
-  await requirePermission("internal_settings.manage");
+  const adminContext = await requirePermission("internal_settings.view");
   const settings = await listInternalSettings();
 
   return (
@@ -15,7 +15,10 @@ export default async function InternalSettingsPage() {
         title="Internal Settings"
         description="Operational configuration separated from personal admin settings and guarded by explicit permissions."
       />
-      <InternalSettingsClient settings={settings} />
+      <InternalSettingsClient
+        settings={settings}
+        canManageSettings={hasPermission(adminContext, "internal_settings.manage")}
+      />
     </div>
   );
 }

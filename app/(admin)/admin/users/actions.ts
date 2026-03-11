@@ -1,11 +1,14 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { auditWithCurrentAdmin } from "@/lib/admin/audit";
 import { runAdminMutation, toAdminActionError } from "@/lib/admin/mutations";
-import { requirePermission } from "@/lib/admin/permissions";
-import { assertSameOriginMutation } from "@/lib/admin/security";
+import {
+  deleteSubscriptionSchema,
+  setUserVerificationSchema,
+  subscriptionUpsertSchema,
+  userIdSchema,
+  userUpdateSchema,
+} from "@/lib/admin/schemas/hardening";
 import { bulkJobInputSchema } from "@/lib/admin/schemas/phase2";
 import { createBulkJob, updateBulkJobState } from "@/lib/admin/services/bulk-jobs";
 import { upsertReviewQueueItem } from "@/lib/admin/services/reviews";
@@ -43,20 +46,12 @@ function normalizeText(value: string | null | undefined): string | null {
   return normalized ? normalized : null;
 }
 
-function revalidateUserAdminPaths(userId: string) {
-  revalidatePath("/admin/users");
-  revalidatePath(`/admin/users/${userId}`);
-  revalidatePath("/admin/subscriptions");
-  revalidatePath("/admin/reviews");
-  revalidatePath("/admin/segments");
-}
-
 function resolveStatusPermission(nextStatus: UserRow["status"]) {
   if (nextStatus === "suspended") return "users.suspend" as const;
   if (nextStatus === "banned") return "users.ban" as const;
   if (nextStatus === "active") return "users.reactivate" as const;
   if (nextStatus === "under_review" || nextStatus === "flagged") {
-    return "reviews.manage" as const;
+    return "review_queue.manage" as const;
   }
   return "users.edit" as const;
 }
@@ -124,96 +119,164 @@ export async function updateUserAction(
   id: string,
   values: UserUpdateValues
 ): Promise<{ error?: string }> {
-  await assertSameOriginMutation();
-  await requirePermission("users.edit");
+  const parsed = userUpdateSchema.safeParse({ id, values });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid user update" };
+  }
 
-  const supabase = createAdminClient();
-  const { data: before } = await supabase
-    .from("users")
-    .select("id, display_name, is_email_verified, profile_image_url, profile_image, custom_categories, last_active_at")
-    .eq("id", id)
-    .maybeSingle();
-  const afterState = {
-    display_name: normalizeText(values.display_name),
-    is_email_verified: values.is_email_verified,
-    profile_image_url: normalizeText(values.profile_image_url),
-    profile_image: normalizeText(values.profile_image),
-    custom_categories: values.custom_categories ?? null,
-    last_active_at: values.last_active_at ?? null,
-  };
-  const { error } = await supabase
-    .from("users")
-    .update({
-      ...afterState,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", id);
-  if (error) return { error: error.message };
-  await auditWithCurrentAdmin({
-    actionType: "user.updated",
-    category: "user",
-    targetEntityType: "user",
-    targetEntityId: id,
-    beforeState: before ?? null,
-    afterState,
-  });
-  revalidateUserAdminPaths(id);
-  return {};
+  try {
+    return await runAdminMutation({
+      permission: "users.edit",
+      execute: async () => {
+        const supabase = createAdminClient();
+        const { data: before } = await supabase
+          .from("users")
+          .select("id, display_name, is_email_verified, profile_image_url, profile_image, custom_categories, last_active_at")
+          .eq("id", parsed.data.id)
+          .maybeSingle();
+
+        const afterState = {
+          display_name: normalizeText(parsed.data.values.display_name),
+          is_email_verified: parsed.data.values.is_email_verified,
+          profile_image_url: normalizeText(parsed.data.values.profile_image_url),
+          profile_image: normalizeText(parsed.data.values.profile_image),
+          custom_categories: (parsed.data.values.custom_categories ?? null) as Json | null,
+          last_active_at: parsed.data.values.last_active_at ?? null,
+        };
+
+        const { error } = await supabase
+          .from("users")
+          .update({
+            ...afterState,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", parsed.data.id);
+
+        if (error) {
+          throw new Error(error.message);
+        }
+
+        return {
+          value: {},
+          audit: {
+            actionType: "user.updated",
+            category: "user",
+            targetEntityType: "user",
+            targetEntityId: parsed.data.id,
+            beforeState: before ?? null,
+            afterState,
+          },
+          revalidatePaths: [
+            "/admin/users",
+            `/admin/users/${parsed.data.id}`,
+            "/admin/subscriptions",
+            "/admin/reviews",
+            "/admin/segments",
+          ],
+        };
+      },
+    });
+  } catch (error) {
+    return toAdminActionError(error, "Failed to update user");
+  }
 }
 
 export async function setUserVerificationAction(
   id: string,
   isVerified: boolean
 ): Promise<{ error?: string }> {
-  await assertSameOriginMutation();
-  await requirePermission("users.edit");
+  const parsed = setUserVerificationSchema.safeParse({ id, isVerified });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid verification update" };
+  }
 
-  const supabase = createAdminClient();
-  const { error } = await supabase
-    .from("users")
-    .update({
-      is_email_verified: isVerified,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", id);
+  try {
+    return await runAdminMutation({
+      permission: "users.edit",
+      execute: async () => {
+        const supabase = createAdminClient();
+        const { error } = await supabase
+          .from("users")
+          .update({
+            is_email_verified: parsed.data.isVerified,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", parsed.data.id);
 
-  if (error) return { error: error.message };
-  await auditWithCurrentAdmin({
-    actionType: "user.email_verification_set",
-    category: "user",
-    targetEntityType: "user",
-    targetEntityId: id,
-    afterState: { is_email_verified: isVerified },
-  });
+        if (error) {
+          throw new Error(error.message);
+        }
 
-  revalidateUserAdminPaths(id);
-  return {};
+        return {
+          value: {},
+          audit: {
+            actionType: "user.email_verification_set",
+            category: "user",
+            targetEntityType: "user",
+            targetEntityId: parsed.data.id,
+            afterState: { is_email_verified: parsed.data.isVerified },
+          },
+          revalidatePaths: [
+            "/admin/users",
+            `/admin/users/${parsed.data.id}`,
+            "/admin/subscriptions",
+            "/admin/reviews",
+            "/admin/segments",
+          ],
+        };
+      },
+    });
+  } catch (error) {
+    return toAdminActionError(error, "Failed to update verification");
+  }
 }
 
 export async function setUserLastActiveNowAction(id: string): Promise<{ error?: string }> {
-  await assertSameOriginMutation();
-  await requirePermission("users.edit");
+  const parsed = userIdSchema.safeParse({ id });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid user id" };
+  }
 
-  const supabase = createAdminClient();
-  const { error } = await supabase
-    .from("users")
-    .update({
-      last_active_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", id);
+  try {
+    return await runAdminMutation({
+      permission: "users.edit",
+      execute: async () => {
+        const supabase = createAdminClient();
+        const lastActiveAt = new Date().toISOString();
+        const { error } = await supabase
+          .from("users")
+          .update({
+            last_active_at: lastActiveAt,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", parsed.data.id);
 
-  if (error) return { error: error.message };
-  await auditWithCurrentAdmin({
-    actionType: "user.last_active_overridden",
-    category: "user",
-    targetEntityType: "user",
-    targetEntityId: id,
-    afterState: { last_active_at: new Date().toISOString() },
-  });
+        if (error) {
+          throw new Error(error.message);
+        }
 
-  revalidateUserAdminPaths(id);
-  return {};
+        return {
+          value: {},
+          audit: {
+            actionType: "user.last_active_overridden",
+            category: "user",
+            targetEntityType: "user",
+            targetEntityId: parsed.data.id,
+            afterState: { last_active_at: lastActiveAt },
+          },
+          revalidatePaths: [
+            "/admin/users",
+            `/admin/users/${parsed.data.id}`,
+            "/admin/subscriptions",
+            "/admin/reviews",
+            "/admin/segments",
+          ],
+        };
+      },
+    });
+  } catch (error) {
+    return toAdminActionError(error, "Failed to set last active");
+  }
 }
 
 async function getLatestSubscriptionId(
@@ -236,56 +299,81 @@ export async function upsertUserSubscriptionAction(
   userId: string,
   values: SubscriptionUpsertValues
 ): Promise<{ error?: string }> {
-  await assertSameOriginMutation();
-  await requirePermission("subscriptions.manage");
-
-  if (!normalizeText(values.plan) || !normalizeText(values.status)) {
-    return { error: "Plan and status are required" };
+  const parsed = subscriptionUpsertSchema.safeParse({ userId, values });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid subscription payload" };
   }
 
-  const { id: subscriptionId, error: subscriptionLookupError } =
-    await getLatestSubscriptionId(userId);
-  if (subscriptionLookupError) return { error: subscriptionLookupError };
+  try {
+    return await runAdminMutation({
+      permission: "subscriptions.manage",
+      requireRecentAuth: true,
+      execute: async () => {
+        const { id: subscriptionId, error: subscriptionLookupError } =
+          await getLatestSubscriptionId(parsed.data.userId);
+        if (subscriptionLookupError) {
+          throw new Error(subscriptionLookupError);
+        }
 
-  const supabase = createAdminClient();
-  const { data: before } = subscriptionId
-    ? await supabase.from("subscriptions").select("*").eq("id", subscriptionId).maybeSingle()
-    : { data: null };
-  const payload = {
-    plan: normalizeText(values.plan) ?? "free",
-    status: normalizeText(values.status) ?? "active",
-    platform: normalizeText(values.platform),
-    trial_start: values.trial_start ?? null,
-    trial_end: values.trial_end ?? null,
-    subscription_start: values.subscription_start ?? null,
-    subscription_end: values.subscription_end ?? null,
-    current_period_start: values.current_period_start ?? null,
-    current_period_end: values.current_period_end ?? null,
-    stripe_customer_id: normalizeText(values.stripe_customer_id),
-    stripe_subscription_id: normalizeText(values.stripe_subscription_id),
-    apple_transaction_id: normalizeText(values.apple_transaction_id),
-    updated_at: new Date().toISOString(),
-  };
+        const supabase = createAdminClient();
+        const { data: before } = subscriptionId
+          ? await supabase
+              .from("subscriptions")
+              .select("*")
+              .eq("id", subscriptionId)
+              .maybeSingle()
+          : { data: null };
 
-  const result = subscriptionId
-    ? await supabase.from("subscriptions").update(payload).eq("id", subscriptionId)
-    : await supabase.from("subscriptions").insert({
-        user_id: userId,
-        ...payload,
-      });
+        const payload = {
+          plan: normalizeText(parsed.data.values.plan) ?? "free",
+          status: normalizeText(parsed.data.values.status) ?? "active",
+          platform: normalizeText(parsed.data.values.platform),
+          trial_start: parsed.data.values.trial_start ?? null,
+          trial_end: parsed.data.values.trial_end ?? null,
+          subscription_start: parsed.data.values.subscription_start ?? null,
+          subscription_end: parsed.data.values.subscription_end ?? null,
+          current_period_start: parsed.data.values.current_period_start ?? null,
+          current_period_end: parsed.data.values.current_period_end ?? null,
+          stripe_customer_id: normalizeText(parsed.data.values.stripe_customer_id),
+          stripe_subscription_id: normalizeText(parsed.data.values.stripe_subscription_id),
+          apple_transaction_id: normalizeText(parsed.data.values.apple_transaction_id),
+          updated_at: new Date().toISOString(),
+        };
 
-  if (result.error) return { error: result.error.message };
-  await auditWithCurrentAdmin({
-    actionType: subscriptionId ? "subscription.updated" : "subscription.created",
-    category: "subscription",
-    targetEntityType: "user",
-    targetEntityId: userId,
-    beforeState: before ?? null,
-    afterState: payload,
-  });
+        const result = subscriptionId
+          ? await supabase.from("subscriptions").update(payload).eq("id", subscriptionId)
+          : await supabase.from("subscriptions").insert({
+              user_id: parsed.data.userId,
+              ...payload,
+            });
 
-  revalidateUserAdminPaths(userId);
-  return {};
+        if (result.error) {
+          throw new Error(result.error.message);
+        }
+
+        return {
+          value: {},
+          audit: {
+            actionType: subscriptionId ? "subscription.updated" : "subscription.created",
+            category: "subscription",
+            targetEntityType: "user",
+            targetEntityId: parsed.data.userId,
+            beforeState: before ?? null,
+            afterState: payload,
+          },
+          revalidatePaths: [
+            "/admin/users",
+            `/admin/users/${parsed.data.userId}`,
+            "/admin/subscriptions",
+            "/admin/reviews",
+            "/admin/segments",
+          ],
+        };
+      },
+    });
+  } catch (error) {
+    return toAdminActionError(error, "Failed to save subscription");
+  }
 }
 
 export async function applySubscriptionPresetAction(
@@ -320,29 +408,55 @@ export async function deleteSubscriptionAction(
   subscriptionId: string,
   userId: string
 ): Promise<{ error?: string }> {
-  await assertSameOriginMutation();
-  await requirePermission("subscriptions.manage");
+  const parsed = deleteSubscriptionSchema.safeParse({ subscriptionId, userId });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid subscription delete request" };
+  }
 
-  const supabase = createAdminClient();
-  const { data: before } = await supabase
-    .from("subscriptions")
-    .select("*")
-    .eq("id", subscriptionId)
-    .maybeSingle();
-  const { error } = await supabase.from("subscriptions").delete().eq("id", subscriptionId);
-  if (error) return { error: error.message };
+  try {
+    return await runAdminMutation({
+      permission: "subscriptions.manage",
+      requireRecentAuth: true,
+      execute: async () => {
+        const supabase = createAdminClient();
+        const { data: before } = await supabase
+          .from("subscriptions")
+          .select("*")
+          .eq("id", parsed.data.subscriptionId)
+          .maybeSingle();
 
-  await auditWithCurrentAdmin({
-    actionType: "subscription.deleted",
-    category: "subscription",
-    severity: "warning",
-    targetEntityType: "user",
-    targetEntityId: userId,
-    beforeState: before ?? null,
-  });
+        const { error } = await supabase
+          .from("subscriptions")
+          .delete()
+          .eq("id", parsed.data.subscriptionId);
 
-  revalidateUserAdminPaths(userId);
-  return {};
+        if (error) {
+          throw new Error(error.message);
+        }
+
+        return {
+          value: {},
+          audit: {
+            actionType: "subscription.deleted",
+            category: "subscription",
+            severity: "warning",
+            targetEntityType: "user",
+            targetEntityId: parsed.data.userId,
+            beforeState: before ?? null,
+          },
+          revalidatePaths: [
+            "/admin/users",
+            `/admin/users/${parsed.data.userId}`,
+            "/admin/subscriptions",
+            "/admin/reviews",
+            "/admin/segments",
+          ],
+        };
+      },
+    });
+  } catch (error) {
+    return toAdminActionError(error, "Failed to delete subscription");
+  }
 }
 
 export async function updateUserStatusAction(

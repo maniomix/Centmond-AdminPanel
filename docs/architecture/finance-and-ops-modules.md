@@ -22,7 +22,8 @@ Important constraint:
 Current implementation:
 
 - export jobs are stored in `export_jobs`
-- every export requires `exports.run`
+- export history requires `exports.view`
+- export generation and downloads require `exports.manage`
 - export creation requires recent re-auth
 - completed files are served through authenticated admin routes
 

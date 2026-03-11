@@ -23,7 +23,7 @@ export async function revokeUserSessionAction(values: unknown) {
 
   try {
     return await runAdminMutation({
-      permission: "users.sessions.manage",
+      permission: "user_sessions.manage",
       requireRecentAuth: true,
       execute: async (actor) => {
         await revokeUserSession({
@@ -62,7 +62,7 @@ export async function revokeAllUserSessionsAction(values: unknown) {
 
   try {
     return await runAdminMutation({
-      permission: "users.sessions.manage",
+      permission: "user_sessions.manage",
       requireRecentAuth: true,
       execute: async (actor) => {
         await revokeAllUserSessions({
@@ -109,7 +109,7 @@ export async function markUserDeviceSuspiciousAction(
 
   try {
     return await runAdminMutation({
-      permission: "users.sessions.manage",
+      permission: "user_sessions.manage",
       execute: async () => {
         await markUserDeviceSuspicious({
           deviceId,

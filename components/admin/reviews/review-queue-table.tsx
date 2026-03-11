@@ -40,7 +40,10 @@ interface ReviewQueueTableProps {
 const queueOptions = [
   { label: "Under Review", value: "under_review" },
   { label: "Escalated", value: "escalated" },
+  { label: "Approved", value: "approved" },
+  { label: "Rejected", value: "rejected" },
   { label: "Restricted", value: "restricted" },
+  { label: "False Positive", value: "false_positive" },
   { label: "Resolved", value: "resolved" },
   { label: "All", value: "all" },
 ];
@@ -51,7 +54,9 @@ const statusVariant: Record<
 > = {
   under_review: "warning",
   escalated: "info",
+  rejected: "destructive",
   restricted: "destructive",
+  false_positive: "secondary",
   resolved: "secondary",
   approved: "success",
 };

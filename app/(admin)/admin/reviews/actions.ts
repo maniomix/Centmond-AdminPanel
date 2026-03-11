@@ -14,7 +14,7 @@ export async function updateReviewQueueItemAction(values: unknown) {
 
   try {
     return await runAdminMutation({
-      permission: "reviews.manage",
+      permission: "review_queue.manage",
       requireRecentAuth: ["approved", "restricted", "rejected"].includes(parsed.status),
       execute: async (actor) => {
         const item = await upsertReviewQueueItem({
@@ -60,7 +60,7 @@ export async function createSupportHandoffAction(values: unknown) {
 
   try {
     return await runAdminMutation({
-      anyPermissions: ["support.notes.manage", "finance.notes.manage"],
+      permission: "support_handoffs.manage",
       execute: async (actor) => {
         const handoff = await createSupportHandoff({
           userId: parsed.userId,

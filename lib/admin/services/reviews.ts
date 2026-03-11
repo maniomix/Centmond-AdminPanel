@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isMissingTableError } from "@/lib/admin/table-error-utils";
 
 export async function listReviewQueueData() {
   const supabase = createAdminClient();
@@ -132,6 +133,9 @@ export async function listSupportHandoffsForUser(userId: string) {
     .limit(10);
 
   if (error) {
+    if (isMissingTableError(error.message, "support_handoffs")) {
+      return [];
+    }
     throw new Error(error.message);
   }
 

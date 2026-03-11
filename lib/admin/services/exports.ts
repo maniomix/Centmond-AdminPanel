@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isMissingTableError } from "@/lib/admin/table-error-utils";
 import { formatDate } from "@/lib/utils";
 
 function escapeCsvCell(value: unknown): string {
@@ -113,6 +114,9 @@ export async function listExportJobs(limit = 20) {
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) {
+    if (isMissingTableError(error.message, "export_jobs")) {
+      return [];
+    }
     throw new Error(error.message);
   }
   return data ?? [];
@@ -201,6 +205,9 @@ export async function getExportJobContent(jobId: string) {
     .maybeSingle();
 
   if (error) {
+    if (isMissingTableError(error.message, "export_jobs")) {
+      return null;
+    }
     throw new Error(error.message);
   }
 

@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AdminPermissionKey } from "@/lib/admin/constants";
+import { hasAdminPermission } from "@/lib/admin/permission-utils";
 
 interface NavItem {
   section: "Overview" | "Operations" | "Revenue" | "Security" | "Configuration";
@@ -65,7 +66,7 @@ const navItems: NavItem[] = [
     label: "Review Queue",
     href: "/admin/reviews",
     icon: AlertTriangle,
-    anyPermissions: ["reviews.manage"],
+    anyPermissions: ["review_queue.manage"],
   },
   {
     section: "Revenue",
@@ -79,7 +80,7 @@ const navItems: NavItem[] = [
     label: "Finance",
     href: "/admin/finance",
     icon: Wallet,
-    anyPermissions: ["finance.manage", "billing.view"],
+    anyPermissions: ["finance.view", "finance.manage"],
   },
   {
     section: "Security",
@@ -107,21 +108,21 @@ const navItems: NavItem[] = [
     label: "Exports",
     href: "/admin/exports",
     icon: FileDown,
-    anyPermissions: ["exports.run"],
+    anyPermissions: ["exports.view", "exports.manage"],
   },
   {
     section: "Configuration",
     label: "Feature Flags",
     href: "/admin/feature-flags",
     icon: ToggleLeft,
-    anyPermissions: ["feature_flags.manage"],
+    anyPermissions: ["feature_flags.view", "feature_flags.manage"],
   },
   {
     section: "Configuration",
     label: "Internal Settings",
     href: "/admin/internal-settings",
     icon: SlidersHorizontal,
-    anyPermissions: ["internal_settings.manage"],
+    anyPermissions: ["internal_settings.view", "internal_settings.manage"],
   },
   {
     section: "Configuration",
@@ -138,11 +139,15 @@ interface SidebarProps {
 
 export function Sidebar({ roleKeys = [], permissions = [] }: SidebarProps) {
   const pathname = usePathname();
-  const isSuperAdmin = roleKeys.includes("super_admin");
+  const permissionContext = {
+    roleKeys,
+    permissions: new Set(permissions),
+  };
   const visibleItems = navItems.filter((item) => {
     if (!item.anyPermissions?.length) return true;
-    if (isSuperAdmin) return true;
-    return item.anyPermissions.some((permission) => permissions.includes(permission));
+    return item.anyPermissions.some((permission) =>
+      hasAdminPermission(permissionContext, permission)
+    );
   });
   const sections = Array.from(new Set(visibleItems.map((item) => item.section)));
 

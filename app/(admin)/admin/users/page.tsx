@@ -368,7 +368,7 @@ export default async function UsersPage({
           canManageSubscriptions: hasPermission(adminContext, "subscriptions.manage"),
           canManageTags: hasPermission(adminContext, "tags.manage"),
           canRunBulkActions: hasPermission(adminContext, "bulk_actions.run"),
-          canReviewUsers: hasPermission(adminContext, "reviews.manage"),
+          canReviewUsers: hasPermission(adminContext, "review_queue.manage"),
           canViewTransactions:
             hasPermission(adminContext, "billing.view") ||
             hasPermission(adminContext, "subscriptions.view"),

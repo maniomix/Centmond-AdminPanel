@@ -4,7 +4,8 @@
 
 - no export generation is performed client-side
 - download routes validate the current admin session on the server
-- export access requires `exports.run`
+- export history requires `exports.view`
+- export generation and downloads require `exports.manage`
 - export creation is audited
 
 ## Export Lifecycle

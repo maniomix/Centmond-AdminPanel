@@ -10,7 +10,7 @@ export async function GET(
   if (!admin) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (!hasPermission(admin, "exports.run")) {
+  if (!hasPermission(admin, "exports.manage")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
